@@ -260,6 +260,10 @@
     }
     calc.className = "btn" + (state.mcCharm ? " gold" : "");
     calc.textContent = state.mcCharm ? "演算用幸运符 · 开" : "演算用幸运符 · 关";
+    const mcWrap = byId("mcCharmFromWrap");
+    if (mcWrap) mcWrap.hidden = !state.mcCharm;
+    const autoWrap = byId("autoCharmFromWrap");
+    if (autoWrap) autoWrap.hidden = !state.useCharm;
   }
 
   function renderStage() {
@@ -367,6 +371,7 @@
     overlay.hidden = true;
     overlay.className = "amp-overlay";
     overlay._payload = null;
+    hideMax20Flash();
     sfx("stopCharge");
     byId("ampAnim").hidden = false;
     byId("ampResult").hidden = true;
@@ -389,6 +394,52 @@
     return '<svg viewBox="0 0 46 46" fill="none"><circle cx="23" cy="23" r="20" stroke="currentColor" stroke-width="1.6"/><path d="M23 12v14" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/><path d="M16 24l7 9 7-9" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>';
   }
 
+  function fillBurstLayer(el, count, shardRatio) {
+    if (!el) return;
+    const bits = [];
+    for (let i = 0; i < count; i++) {
+      const ang = (Math.PI * 2 * i) / count + Math.random() * 0.55;
+      const dist = 26 + Math.random() * 68;
+      const tx = (Math.cos(ang) * dist).toFixed(1);
+      const ty = (Math.sin(ang) * dist).toFixed(1);
+      const delay = (Math.random() * 0.28).toFixed(2);
+      const dur = (0.55 + Math.random() * 0.95).toFixed(2);
+      const shard = Math.random() < (shardRatio || 0.22);
+      const w = shard ? (2 + Math.random() * 3).toFixed(1) : (3 + Math.random() * 9).toFixed(1);
+      const h = shard ? (16 + Math.random() * 34).toFixed(1) : w;
+      bits.push(
+        '<i class="fx-spark' + (shard ? " shard" : "") +
+        '" style="--tx:' + tx + "vmin;--ty:" + ty + "vmin;--rot:" +
+        ((ang * 180) / Math.PI).toFixed(1) + "deg;width:" + w + "px;height:" + h +
+        "px;animation-delay:" + delay + "s;animation-duration:" + dur + 's"></i>'
+      );
+    }
+    el.innerHTML = bits.join("");
+  }
+
+  function hideMax20Flash() {
+    const el = byId("max20Flash");
+    if (!el) return;
+    el.classList.remove("show");
+    el.hidden = true;
+    const sparks = byId("max20Sparks");
+    if (sparks) sparks.innerHTML = "";
+    clearTimeout(hideMax20Flash._t);
+  }
+
+  function flashMax20() {
+    const el = byId("max20Flash");
+    if (!el) return;
+    fillBurstLayer(byId("max20Sparks"), 56, 0.22);
+    el.hidden = false;
+    el.classList.remove("show");
+    void el.offsetWidth;
+    el.classList.add("show");
+    sfx("stamp");
+    clearTimeout(hideMax20Flash._t);
+    hideMax20Flash._t = setTimeout(hideMax20Flash, 2200);
+  }
+
   function showAmpResult(payload) {
     const overlay = byId("ampOverlay");
     const kind = payload.result;
@@ -407,6 +458,7 @@
     byId("ampResultMeta").innerHTML = payload.meta;
     sfx("stopCharge");
     state.fusing = false;
+    if (kind === "success" && payload.to >= D.MAX_LEVEL) flashMax20();
     render();
   }
 
@@ -732,11 +784,13 @@
     const target = clampNum(byId("mcTarget").value, 1, D.MAX_LEVEL);
     const count = clampNum(byId("mcCount").value, 1, C.monteCarlo.maxCount || 12);
     const runs = clampNum(byId("mcRuns").value, C.monteCarlo.minRuns, C.monteCarlo.maxRuns);
-    const charmFrom = clampNum(byId("mcCharmFrom").value, 0, D.MAX_LEVEL);
+    const charmFrom = state.mcCharm ? clampNum(byId("mcCharmFrom").value, 0, D.MAX_LEVEL) : 0;
     if (target <= start) {
       toast("目标必须高于起始等级", "deny");
       return;
     }
+    byId("mcStart").value = start;
+    byId("mcTarget").value = target;
     byId("mcCount").value = count;
     byId("mcOut").innerHTML = "<p class='hint'>计算中… 0%</p>";
     const adviceBox = byId("mcAdvice");
@@ -896,8 +950,27 @@
     gl.max = max;
   }
 
+  function bindClamp(id, min, max) {
+    const el = byId(id);
+    if (!el) return;
+    const apply = () => { el.value = clampNum(el.value, min, max); };
+    el.addEventListener("change", apply);
+    el.addEventListener("blur", apply);
+    el.addEventListener("input", () => {
+      if (el.value === "" || el.value === "-") return;
+      const n = Number(el.value);
+      if (!Number.isNaN(n) && n > max) el.value = max;
+    });
+  }
+
   function bind() {
     applyConfigUI();
+    bindClamp("mcTarget", 1, D.MAX_LEVEL);
+    bindClamp("mcStart", 0, D.MAX_LEVEL - 1);
+    bindClamp("mcCharmFrom", 0, D.MAX_LEVEL);
+    bindClamp("mcCount", 1, C.monteCarlo.maxCount || 12);
+    bindClamp("autoTarget", 1, D.MAX_LEVEL);
+    bindClamp("autoCharmFrom", 0, D.MAX_LEVEL);
     byId("btnAmp").onclick = () => amplifyOnce();
     byId("btnSkipAnim").onclick = skipAmpAnim;
     byId("btnCloseResult").onclick = closeAmpOverlay;
@@ -1012,8 +1085,8 @@
     $$("[data-mc]").forEach((btn) => {
       btn.onclick = () => {
         const [a, b] = btn.dataset.mc.split(",");
-        byId("mcStart").value = a;
-        byId("mcTarget").value = b;
+        byId("mcStart").value = clampNum(a, 0, D.MAX_LEVEL - 1);
+        byId("mcTarget").value = clampNum(b, 1, D.MAX_LEVEL);
         sfx("tab");
         runMonteCarlo();
       };

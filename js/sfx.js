@@ -321,6 +321,24 @@
     tab() { tone("sine", 620, 0.08, 0.08); },
     deny() { tone("square", 160, 0.12, 0.1); },
     calc() { sweep(300, 520, 0.16, 0.1); },
+    stamp() {
+      whenReady(() => {
+        const t0 = audio.currentTime + 0.01;
+        playNotes([196, 261.63, 329.63, 392, 523.25, 659.25, 783.99], 0.07, 0.28, 0.16, "triangle", t0);
+        const o = audio.createOscillator();
+        o.type = "sine";
+        o.frequency.setValueAtTime(220, t0);
+        o.frequency.exponentialRampToValueAtTime(80, t0 + 0.28);
+        const g = audio.createGain();
+        g.gain.setValueAtTime(0.0001, t0);
+        g.gain.exponentialRampToValueAtTime(0.18, t0 + 0.02);
+        g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.42);
+        o.connect(g);
+        g.connect(master);
+        o.start(t0);
+        o.stop(t0 + 0.46);
+      });
+    },
     skip() { stopCharge(); },
     charge,
     stopCharge,

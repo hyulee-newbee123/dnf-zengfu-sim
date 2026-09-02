@@ -18,7 +18,7 @@
       <div class="eyebrow">地下城与勇士手游 · 模拟器</div>
       <div class="hero-title">
         <h1>增幅机</h1>
-        <span class="ver">v1.4</span>
+        <span class="ver">v1.5</span>
       </div>
       <p>成功 / 降级 / 破坏 · 纯属娱乐</p>
       <div class="hero-spent">
@@ -100,7 +100,7 @@
               <label>间隔毫秒
                 <input type="number" id="autoDelay" min="0" max="2000" value="180" />
               </label>
-              <label>几级前不用符
+              <label id="autoCharmFromWrap" hidden>几级前不用符
                 <input type="number" id="autoCharmFrom" min="0" max="20" value="4" />
               </label>
               <label>破坏后
@@ -163,7 +163,7 @@
         <label>模拟次数
           <select id="mcRuns"></select>
         </label>
-        <label>几级前不用符
+        <label id="mcCharmFromWrap" hidden>几级前不用符
           <input type="number" id="mcCharmFrom" min="0" max="20" value="4" />
         </label>
       </div>
@@ -207,6 +207,20 @@
       </div>
       <div class="swap-pick-list" id="swapPickList"></div>
       <button type="button" class="btn" id="btnCloseSwapPick">取消</button>
+    </div>
+  </div>
+  <div class="max20-flash" id="max20Flash" hidden>
+    <div class="fx-burst max20-burst"></div>
+    <div class="fx-burst max20-burst-2"></div>
+    <div class="fx-rays max20-rays"></div>
+    <div class="fx-ring max20-ring"></div>
+    <div class="fx-ring max20-ring delay-a"></div>
+    <div class="fx-ring max20-ring delay-b"></div>
+    <div class="max20-sparks" id="max20Sparks"></div>
+    <div class="max20-mark-wrap">
+      <div class="max20-mark-sub">增幅盖印</div>
+      <div class="max20-mark">+20</div>
+      <div class="max20-mark-foot">MAX AMPLIFY</div>
     </div>
   </div>
   <div class="toast" id="toast"></div>
