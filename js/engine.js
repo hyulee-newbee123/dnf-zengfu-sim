@@ -52,6 +52,35 @@
     wallet.charm -= cost.charm;
   }
 
+  let simTables = null;
+  function ensureSimTables() {
+    if (simTables) return simTables;
+    const max = D.MAX_LEVEL;
+    const rateOff = new Float64Array(max);
+    const rateOn = new Float64Array(max);
+    const drop = new Int8Array(max);
+    const dead = new Uint8Array(max);
+    for (let i = 0; i < max; i++) {
+      rateOff[i] = D.BASE_SUCCESS[i];
+      rateOn[i] = clamp(D.BASE_SUCCESS[i] + D.charmBonus(i), 0, 100);
+      const rule = D.failRule(i);
+      if (rule.type === "destroy") dead[i] = 1;
+      else if (rule.type === "downgrade") drop[i] = rule.drop || 0;
+    }
+    const cfg = global.DNFConfig;
+    simTables = {
+      rateOff,
+      rateOn,
+      drop,
+      dead,
+      cryW: D.CRYSTAL_WEAPON,
+      cryG: D.CRYSTAL_GEAR,
+      goldPer: (cfg && cfg.goldPerCrystal) || 2000,
+      charmMin: (cfg && cfg.charm && cfg.charm.minLevel) || 4,
+    };
+    return simTables;
+  }
+
   /**
    * 从 start 冲到 target。破坏则换新胚子从 0 重来。
    * 返回统计，不修改外部状态（纯模拟）。
@@ -71,6 +100,9 @@
       return emptySim(start, target);
     }
 
+    const T = ensureSimTables();
+    const cry = isWeapon ? T.cryW : T.cryG;
+    const charmFloor = useCharm ? Math.max(charmFrom, T.charmMin) : 1e9;
     let level = start;
     let embryoUsed = 1;
     let attempts = 0;
@@ -78,56 +110,54 @@
     let downgrade = 0;
     let destroy = 0;
     let crystal = 0;
-    let gold = 0;
     let charm = 0;
     let peak = start;
 
     while (level < target) {
-      const charmOn = useCharm && level >= charmFrom;
-      const cost = attemptCost(level, isWeapon, charmOn);
-      crystal += cost.crystal;
-      gold += cost.gold;
-      charm += cost.charm;
+      const charmOn = level >= charmFloor;
+      crystal += cry[level] || 0;
+      if (charmOn) charm += 1;
       attempts += 1;
-
-      const out = roll(level, charmOn, rng);
-      if (out.result === "success") {
+      if (rng() * 100 < (charmOn ? T.rateOn[level] : T.rateOff[level])) {
         success += 1;
-        level = out.to;
+        level += 1;
         if (level > peak) peak = level;
-      } else if (out.result === "downgrade") {
-        downgrade += 1;
-        level = out.to;
-      } else if (out.result === "destroy") {
+      } else if (T.dead[level]) {
         destroy += 1;
         if (embryoUsed >= maxEmbryo) {
-          return finish(level, true);
+          return packSim(start, target, level, peak, attempts, success, downgrade, destroy, embryoUsed, crystal, charm, T.goldPer, true);
         }
         embryoUsed += 1;
         level = 0;
+      } else {
+        const d = T.drop[level];
+        if (d) {
+          downgrade += 1;
+          level = clamp(level - d, 0, D.MAX_LEVEL);
+        }
       }
     }
 
-    return finish(level, false);
+    return packSim(start, target, level, peak, attempts, success, downgrade, destroy, embryoUsed, crystal, charm, T.goldPer, false);
+  }
 
-    function finish(finalLevel, aborted) {
-      return {
-        reached: !aborted && finalLevel >= target,
-        aborted,
-        finalLevel,
-        peak,
-        attempts,
-        success,
-        downgrade,
-        destroy,
-        embryoUsed,
-        crystal,
-        gold,
-        charm,
-        start,
-        target,
-      };
-    }
+  function packSim(start, target, finalLevel, peak, attempts, success, downgrade, destroy, embryoUsed, crystal, charm, goldPer, aborted) {
+    return {
+      reached: !aborted && finalLevel >= target,
+      aborted,
+      finalLevel,
+      peak,
+      attempts,
+      success,
+      downgrade,
+      destroy,
+      embryoUsed,
+      crystal,
+      gold: crystal * goldPer,
+      charm,
+      start,
+      target,
+    };
   }
 
   function emptySim(start, target) {
@@ -233,16 +263,19 @@
   }
 
   /**
-   * 全身 +target：比较「几级前不用符」各档，按泰拉期望找出最省方案。
+   * 按件数、类型、起始→目标比较开符档。
+   * 置换成功后胚子变回 start，下一件从 start 接着打；
+   * 破坏后新胚子从 0 重来。
    */
-  function adviseFullSet(opts) {
+  function adviseSet(opts) {
+    const start = Math.max(0, Number(opts.start) || 0);
     const target = opts.target;
+    const isWeapon = !!opts.isWeapon;
+    const count = Math.max(1, Number(opts.count) || 1);
     const prices = {
       crystal: opts.crystalTera,
       charm: opts.charmTera,
     };
-    const weaponSlots = opts.weaponSlots;
-    const gearSlots = opts.gearSlots;
     const cfg = global.DNFConfig;
     const charmMin = (cfg && cfg.charm && cfg.charm.minLevel) || 4;
 
@@ -254,20 +287,15 @@
     }
 
     const rows = plans.map((p) => {
-      const weapon = expectedToTarget({
-        start: 0, target, isWeapon: true, useCharm: p.useCharm, charmFrom: p.charmFrom,
+      const piece = expectedToTarget({
+        start, target, isWeapon, useCharm: p.useCharm, charmFrom: p.charmFrom,
       });
-      const gear = expectedToTarget({
-        start: 0, target, isWeapon: false, useCharm: p.useCharm, charmFrom: p.charmFrom,
-      });
-      const tera = pieceTera(weapon, prices) * weaponSlots + pieceTera(gear, prices) * gearSlots;
       return {
         useCharm: p.useCharm,
         charmFrom: p.charmFrom,
         kind: p.kind,
-        tera,
-        weapon,
-        gear,
+        tera: pieceTera(piece, prices) * count,
+        piece,
       };
     });
 
@@ -277,38 +305,52 @@
     }
     const allCharm = rows.find((r) => r.useCharm && r.charmFrom === charmMin) || null;
     const noCharm = rows.find((r) => !r.useCharm) || rows[0];
+    const mustCharm = best.kind === "from" && start >= best.charmFrom;
     return {
+      start,
       target,
+      isWeapon,
+      count,
       prices,
-      weaponSlots,
-      gearSlots,
       charmMin,
       best,
       allCharm,
       noCharm,
+      mustCharm,
       rows,
     };
   }
 
-  function monteCarlo(opts) {
-    const n = opts.runs || (global.DNFConfig && global.DNFConfig.monteCarlo.defaultRuns) || 2000;
-    const samples = [];
+  function summarizeMonteCarlo(samples) {
+    const n = samples.length;
     let reach = 0;
+    const crystals = new Array(n);
+    const embryos = new Array(n);
+    const attempts = new Array(n);
+    const destroys = new Array(n);
+    const charms = new Array(n);
     for (let i = 0; i < n; i++) {
-      const s = simulateToTarget(opts);
-      samples.push(s);
+      const s = samples[i];
       if (s.reached) reach += 1;
+      crystals[i] = s.crystal;
+      embryos[i] = s.embryoUsed;
+      attempts[i] = s.attempts;
+      destroys[i] = s.destroy;
+      charms[i] = s.charm;
     }
-    const crystals = samples.map((s) => s.crystal).sort((a, b) => a - b);
-    const embryos = samples.map((s) => s.embryoUsed).sort((a, b) => a - b);
-    const attempts = samples.map((s) => s.attempts).sort((a, b) => a - b);
-    const destroys = samples.map((s) => s.destroy).sort((a, b) => a - b);
-    const charms = samples.map((s) => s.charm).sort((a, b) => a - b);
-    const mean = (arr) => arr.reduce((a, b) => a + b, 0) / arr.length;
-
+    crystals.sort((a, b) => a - b);
+    embryos.sort((a, b) => a - b);
+    attempts.sort((a, b) => a - b);
+    destroys.sort((a, b) => a - b);
+    charms.sort((a, b) => a - b);
+    const mean = (arr) => {
+      let s = 0;
+      for (let i = 0; i < arr.length; i++) s += arr[i];
+      return s / arr.length;
+    };
     return {
       runs: n,
-      reachRate: reach / n,
+      reachRate: n ? reach / n : 0,
       crystal: {
         mean: mean(crystals),
         p25: percentile(crystals, 0.25),
@@ -337,6 +379,37 @@
     };
   }
 
+  function monteCarlo(opts) {
+    const n = opts.runs || (global.DNFConfig && global.DNFConfig.monteCarlo.defaultRuns) || 2000;
+    const samples = new Array(n);
+    for (let i = 0; i < n; i++) samples[i] = simulateToTarget(opts);
+    return summarizeMonteCarlo(samples);
+  }
+
+  function monteCarloAsync(opts, onProgress) {
+    const n = opts.runs || (global.DNFConfig && global.DNFConfig.monteCarlo.defaultRuns) || 2000;
+    const samples = new Array(n);
+    let i = 0;
+    return new Promise((resolve) => {
+      function step() {
+        const t0 = typeof performance !== "undefined" ? performance.now() : Date.now();
+        while (i < n) {
+          samples[i] = simulateToTarget(opts);
+          i += 1;
+          const now = typeof performance !== "undefined" ? performance.now() : Date.now();
+          if (now - t0 >= 8) break;
+        }
+        if (onProgress) onProgress(i / n);
+        if (i < n) {
+          setTimeout(step, 0);
+          return;
+        }
+        resolve(summarizeMonteCarlo(samples));
+      }
+      step();
+    });
+  }
+
   global.DNFEngine = {
     successRate,
     roll,
@@ -345,7 +418,8 @@
     pay,
     simulateToTarget,
     expectedToTarget,
-    adviseFullSet,
+    adviseSet,
     monteCarlo,
+    monteCarloAsync,
   };
 })(window);

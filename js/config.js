@@ -118,6 +118,8 @@ window.DNFConfig = {
   monteCarlo: {
     defaultStart: 0,
     defaultTarget: 10,
+    defaultCount: 1,
+    maxCount: 12,
     defaultCharmFrom: 4, /* 演算时低于此等级不消耗幸运符 */
     defaultRuns: 3000,
     runOptions: [1000, 3000, 10000],

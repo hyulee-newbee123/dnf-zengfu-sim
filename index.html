@@ -18,7 +18,7 @@
       <div class="eyebrow">地下城与勇士手游 · 模拟器</div>
       <div class="hero-title">
         <h1>增幅机</h1>
-        <span class="ver">v1.3</span>
+        <span class="ver">v1.4</span>
       </div>
       <p>成功 / 降级 / 破坏 · 纯属娱乐</p>
       <div class="hero-spent">
@@ -142,7 +142,7 @@
 
     <section id="panel-calc" class="panel">
       <h2>期望消耗演算</h2>
-      <p class="hint">按单次概率独立抽样。破坏后换新胚子从 0 重来，直到摸到目标。开了幸运符时，低于设定等级不会消耗。中位数比平均数更接近普通人的花费。计算后会按全身部位和泰拉行情给一开符建议。</p>
+      <p class="hint">按你填的类型、件数、起始和目标来算。破坏后新胚子从 0 重来；置换后胚子回到起始等级，下一件接着打。开了幸运符时，低于设定等级不会消耗。中位数比平均数更接近普通人的花费。</p>
       <div class="preset-grid" id="mcPresets"></div>
       <div class="form-grid">
         <label>胚子类型
@@ -150,6 +150,9 @@
             <option value="weapon">武器</option>
             <option value="gear">非武器</option>
           </select>
+        </label>
+        <label>演算几件
+          <input type="number" id="mcCount" min="1" max="12" value="1" />
         </label>
         <label>起始等级
           <input type="number" id="mcStart" min="0" max="19" value="0" />

@@ -714,39 +714,72 @@
     autoTimer = setTimeout(autoTick, clampNum(byId("autoDelay").value, 0, C.auto.maxDelay));
   }
 
+  let mcBusy = false;
+
+  function setMcBusy(on) {
+    mcBusy = on;
+    const btn = byId("btnMc");
+    if (btn) {
+      btn.disabled = on;
+      btn.textContent = on ? "计算中…" : "计算期望";
+    }
+  }
+
   function runMonteCarlo() {
+    if (mcBusy) return;
     const isWeapon = byId("mcType").value === "weapon";
     const start = clampNum(byId("mcStart").value, 0, D.MAX_LEVEL - 1);
     const target = clampNum(byId("mcTarget").value, 1, D.MAX_LEVEL);
+    const count = clampNum(byId("mcCount").value, 1, C.monteCarlo.maxCount || 12);
     const runs = clampNum(byId("mcRuns").value, C.monteCarlo.minRuns, C.monteCarlo.maxRuns);
     const charmFrom = clampNum(byId("mcCharmFrom").value, 0, D.MAX_LEVEL);
     if (target <= start) {
       toast("目标必须高于起始等级", "deny");
       return;
     }
-    byId("mcOut").innerHTML = "<p class='hint'>计算中…</p>";
+    byId("mcCount").value = count;
+    byId("mcOut").innerHTML = "<p class='hint'>计算中… 0%</p>";
     const adviceBox = byId("mcAdvice");
     adviceBox.hidden = true;
     adviceBox.innerHTML = "";
     sfx("calc");
-    setTimeout(() => {
-      const r = E.monteCarlo({
-        start, target, isWeapon, useCharm: state.mcCharm, charmFrom, runs,
-      });
+    setMcBusy(true);
+
+    const paint = (r) => {
+      const n = count;
+      const piece = n > 1 ? n + "件" : "";
+      const many = n > 1 ? "按 " + n + " 件合计。" : "";
       byId("mcOut").innerHTML = [
-        ["达成率", (r.reachRate * 100).toFixed(1) + "%"],
-        ["矛盾中位数", fmt(r.crystal.p50)],
-        ["矛盾期望", fmt(r.crystal.mean)],
-        ["矛盾 P90", fmt(r.crystal.p90)],
-        ["幸运符中位数", fmt(r.charm.p50)],
-        ["幸运符期望", fmt(r.charm.mean)],
-        ["胚子中位数", r.embryo.p50.toFixed(1)],
-        ["胚子期望", r.embryo.mean.toFixed(2)],
-        ["尝试中位数", fmt(r.attempt.p50)],
-        ["破坏中位数", r.destroy.p50.toFixed(1)],
-      ].map(([k, v]) => `<div class="cell"><span>${k}</span><b class="num">${v}</b></div>`).join("");
-      renderMcAdvice(target);
-    }, 30);
+        ["达成率", (r.reachRate * 100).toFixed(1) + "%", "这么多次独立模拟里，最终打到目标等级的比例。会一直打到目标，所以一般是 100%。"],
+        [piece + "矛盾中位数", fmt(r.crystal.p50 * n), "一半的模拟消耗的矛盾不超过这个数，比平均数更接近普通人的花费。" + many],
+        [piece + "矛盾期望", fmt(r.crystal.mean * n), "所有模拟消耗矛盾的平均值。极欧或极非会把这个数拉高或拉低。" + many],
+        [piece + "矛盾 P90", fmt(r.crystal.p90 * n), "90% 的模拟消耗不超过这个数。剩下 10% 更倒霉，用来看最坏情况要准备多少。" + many],
+        [piece + "幸运符中位数", fmt(r.charm.p50 * n), "一半的模拟用掉的幸运符不超过这个数。没开符或该档不用符时是 0。" + many],
+        [piece + "幸运符期望", fmt(r.charm.mean * n), "所有模拟消耗幸运符的平均值。" + many],
+        [piece + "胚子中位数", (r.embryo.p50 * n).toFixed(1), "一半的模拟用掉的胚子数（含第一件；破坏后换新也算）。置换下来的那件不另计一件。" + many],
+        [piece + "胚子期望", (r.embryo.mean * n).toFixed(2), "平均要用掉几件胚子。破坏越多，这个数越大。" + many],
+        [piece + "尝试中位数", fmt(r.attempt.p50 * n), "一半的模拟里，点「增幅」的次数不超过这个数。" + many],
+        [piece + "破坏中位数", (r.destroy.p50 * n).toFixed(1), "一半的模拟里，胚子被破坏的次数不超过这个数。" + many],
+      ].map(([k, v, tip]) =>
+        `<div class="cell"><span>${k}</span><b class="num">${v}</b><small>${tip}</small></div>`
+      ).join("");
+      renderMcAdvice(start, target, isWeapon, count);
+    };
+
+    const work = E.monteCarloAsync
+      ? E.monteCarloAsync({
+        start, target, isWeapon, useCharm: state.mcCharm, charmFrom, runs,
+      }, (p) => {
+        byId("mcOut").innerHTML = "<p class='hint'>计算中… " + Math.round(p * 100) + "%</p>";
+      })
+      : Promise.resolve(E.monteCarlo({
+        start, target, isWeapon, useCharm: state.mcCharm, charmFrom, runs,
+      }));
+
+    Promise.resolve(work).then(paint).catch((err) => {
+      console.error(err);
+      byId("mcOut").innerHTML = "<p class='hint'>计算失败，请再试一次。</p>";
+    }).then(() => setMcBusy(false));
   }
 
   function fmtTera(n) {
@@ -760,26 +793,34 @@
     return ((b - a) / b) * 100;
   }
 
-  function renderMcAdvice(target) {
+  function renderMcAdvice(start, target, isWeapon, count) {
     const box = byId("mcAdvice");
     const prices = C.tera || { crystal: 200, charm: 13000 };
-    const weaponSlots = D.SLOTS.filter((s) => s.weapon).length;
-    const gearSlots = D.SLOTS.filter((s) => !s.weapon).length;
-    const advice = E.adviseFullSet({
+    const advice = E.adviseSet({
+      start,
       target,
+      isWeapon,
+      count,
       crystalTera: prices.crystal,
       charmTera: prices.charm,
-      weaponSlots,
-      gearSlots,
     });
     const best = advice.best;
+    const kindName = isWeapon ? "武器" : "非武器";
+    const gate = best.charmFrom;
     let headline;
+    let how;
     if (target <= advice.charmMin) {
-      headline = "想上全身 +" + target + " 的话，还在必成附近，幸运符基本用不上。";
+      headline = "还在必成附近，幸运符基本用不上。";
+      how = "从 +" + start + " 打到 +" + target + " 不必带符。破坏后从 0 重来也一样。";
     } else if (best.kind === "none") {
-      headline = "想上全身 +" + target + " 的话，全程不使用幸运符最合适。";
+      headline = "全程不使用幸运符最合适。";
+      how = "从 +" + start + " 打到 +" + target + " 都不用符。破坏后新胚子从 0 重来，也全程不带符。";
+    } else if (advice.mustCharm) {
+      headline = "当前从 +" + start + " 起步必须使用幸运符；破坏后从 0 重来，增幅到 " + gate + " 级后再用符。";
+      how = "手头这件已经到 +" + start + "，一上来就带符。胚子破坏后新胚子从 0 打起，增幅到 +" + gate + " 才开始用幸运符。";
     } else {
-      headline = "想上全身 +" + target + " 的话，应该在 " + best.charmFrom + " 级前不使用幸运符最合适。";
+      headline = "增幅到 " + gate + " 级后才使用幸运符最合适。";
+      how = "从 +" + start + " 打到 +" + target + "，+" + gate + " 级前不用符。破坏后新胚子从 0 重来，同样是增幅到 +" + gate + " 后再用符。";
     }
 
     const vsAll = advice.allCharm ? savePct(best.tera, advice.allCharm.tera) : null;
@@ -796,9 +837,11 @@
     box.innerHTML =
       '<div class="mc-advice-kicker">AI 评测</div>' +
       '<div class="mc-advice-title">' + headline + "</div>" +
-      '<p>按 <b>' + weaponSlots + " 件武器 + " + gearSlots + " 件防具</b>从 0 打到 +" + target +
-      "，矛盾 <b>" + fmt(prices.crystal) + "</b> 泰拉一个、幸运符 <b>" + fmt(prices.charm) +
-      "</b> 泰拉一个折算。全身期望约 <b class=\"num\">" + fmtTera(best.tera) + "</b>。</p>" +
+      "<p>按你填的 <b>" + count + " 件" + kindName + "</b>，从 +" + start + " 打到 +" + target +
+      "。" + how +
+      "置换后胚子变回 +" + start + "，下一件从 +" + start + " 接着打。" +
+      "矛盾 <b>" + fmt(prices.crystal) + "</b> 泰拉一个、幸运符 <b>" + fmt(prices.charm) +
+      "</b> 泰拉一个折算。合计期望约 <b class=\"num\">" + fmtTera(best.tera) + "</b>。</p>" +
       (cmp.length ? "<p>" + cmp.join("；") + "。</p>" : "") +
       '<p class="hint">按期望值扫开符档，和上面抽样表不是同一套数字。行情按矛盾 ' +
       fmt(prices.crystal) + "、幸运符 " + fmt(prices.charm) + " 泰拉。</p>";
@@ -825,6 +868,10 @@
     mcf.min = 0;
     mcf.max = max;
     mcf.value = mc.defaultCharmFrom;
+    const cnt = byId("mcCount");
+    cnt.min = 1;
+    cnt.max = mc.maxCount || 12;
+    cnt.value = mc.defaultCount || 1;
     byId("mcRuns").innerHTML = mc.runOptions.map((n) =>
       "<option" + (n === mc.defaultRuns ? " selected" : "") + ">" + n + "</option>"
     ).join("");

@@ -836,7 +836,7 @@ button.btn.gold.btn-amp:hover {
 }
 .metric {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: 1fr 1fr;
   gap: 8px;
   margin-top: 12px;
 }
@@ -846,7 +846,13 @@ button.btn.gold.btn-amp:hover {
   padding: 10px;
 }
 .metric span { display: block; font-size: 11px; color: var(--ink-dim); }
-.metric b { color: var(--gold-bright); font-size: 20px; }
+.metric b { display: block; color: var(--gold-bright); font-size: 20px; margin: 4px 0 6px; }
+.metric small {
+  display: block;
+  font-size: 11px;
+  line-height: 1.55;
+  color: var(--ink-dim);
+}
 
 .mc-advice {
   margin-top: 16px;

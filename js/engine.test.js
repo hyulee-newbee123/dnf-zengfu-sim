@@ -69,15 +69,42 @@ const alwaysOk = () => 0.001;
 const evSafe = E.expectedToTarget({ start: 0, target: 4, isWeapon: true, useCharm: false });
 assert(Math.round(evSafe.crystal) === 258 && evSafe.charm === 0, "EV 0→4 crystal 258");
 
-const advice = E.adviseFullSet({
+const evStep = E.expectedToTarget({ start: 3, target: 4, isWeapon: true, useCharm: false });
+assert(Math.round(evStep.crystal) === 97, "EV 3→4 is one weapon step");
+
+const advice = E.adviseSet({
+  start: 0,
   target: 10,
+  isWeapon: false,
+  count: 3,
   crystalTera: 200,
   charmTera: 13000,
-  weaponSlots: 1,
-  gearSlots: 11,
 });
-assert(advice.best && Number.isFinite(advice.best.tera), "full-set advice has tera");
+assert(advice.best && Number.isFinite(advice.best.tera), "advice has tera");
+assert(advice.count === 3 && advice.isWeapon === false, "advice uses count and type");
 assert(advice.best.tera <= advice.noCharm.tera, "best is not worse than no charm");
+
+const fromZero = E.adviseSet({
+  start: 0, target: 12, isWeapon: true, count: 1, crystalTera: 200, charmTera: 13000,
+});
+const fromGate = E.adviseSet({
+  start: fromZero.best.charmFrom, target: 12, isWeapon: true, count: 1,
+  crystalTera: 200, charmTera: 13000,
+});
+if (fromZero.best.kind === "from") {
+  assert(fromGate.mustCharm, "start at threshold means must use charm");
+}
+
+const fromSeven = E.adviseSet({
+  start: 7,
+  target: 10,
+  isWeapon: false,
+  count: 3,
+  crystalTera: 200,
+  charmTera: 13000,
+});
+assert(fromSeven.start === 7, "advice uses filled start");
+assert(fromSeven.best.tera < advice.best.tera, "7→10 cheaper than 0→10");
 
 const skipCharm = E.simulateToTarget({
   start: 0, target: 5, useCharm: true, charmFrom: 5, rng: alwaysOk,
