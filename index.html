@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#0c1a12" />
+  <title>增幅机 · DNF 手游</title>
+  <meta name="description" content="DNF 手游增幅机。只增幅次元灵驿，成功 / 降级 / 破坏。仅供娱乐。" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;600&family=ZCOOL+QingKe+HuangYou&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/styles.css" />
+</head>
+<body>
+  <button type="button" class="sfx-toggle" id="btn-sfx" title="循环：开 / 低 / 关">音效 开</button>
+  <div class="app">
+    <header class="hero">
+      <div class="eyebrow">地下城与勇士手游 · 模拟器</div>
+      <div class="hero-title">
+        <h1>增幅机</h1>
+        <span class="ver">v1.2</span>
+      </div>
+      <p>成功 / 降级 / 破坏 · 纯属娱乐</p>
+    </header>
+    <div class="ornament"></div>
+
+    <nav class="tabs">
+      <button class="active" data-tab="amp">增幅</button>
+      <button data-tab="swap">置换</button>
+      <button data-tab="calc">演算</button>
+      <button data-tab="rules">规则</button>
+    </nav>
+
+    <section id="panel-amp" class="panel active">
+      <div class="layout">
+        <div class="col bag-col">
+          <div class="bag-head">
+            <h2>背包</h2>
+            <span class="bag-summary" id="bagSummary"></span>
+            <button type="button" class="btn danger" id="btnClear">清空</button>
+          </div>
+          <p class="hint">点一件放进增幅机再打。破坏后这件从背包消失。</p>
+          <div class="bag-filters">
+            <button type="button" class="btn active" data-bag-filter="all">全部</button>
+            <button type="button" class="btn" data-bag-filter="weapon">武器</button>
+            <button type="button" class="btn" data-bag-filter="gear">非武器</button>
+          </div>
+          <div class="btn-row gen-row">
+            <label class="gen-lv">等级
+              <input type="number" id="genLevel" min="0" max="20" value="0" />
+            </label>
+            <button type="button" class="btn gold" id="btnGenW">生成武器胚子</button>
+            <button type="button" class="btn gold" id="btnGenG">生成非武器胚子</button>
+          </div>
+          <div id="inventory" class="inventory"></div>
+        </div>
+
+        <div class="forge" id="stage">
+          <div class="forge-title">增幅机</div>
+          <p class="hint">只打背包里选中的那一件。没选中时先点左侧胚子。失败从 +10 起会破坏并移出背包。</p>
+          <div class="result-pop" id="pop"></div>
+          <div class="altar empty" id="eqIcon">
+            <div class="altar-marquee" aria-hidden="true">
+              <i></i><i></i><i></i><i></i><i></i><i></i>
+              <i></i><i></i><i></i><i></i><i></i><i></i>
+            </div>
+            <div class="altar-glow"></div>
+            <div class="altar-core">
+              <svg id="eqSvg" viewBox="0 0 96 96" fill="none"></svg>
+            </div>
+            <div class="altar-base">增幅机</div>
+          </div>
+          <div class="amp-lv num" id="ampLv">+0</div>
+          <div class="amp-sub" id="ampSub"></div>
+          <div class="rate-box">
+            <div><b class="num" id="rateNow">100%</b><span>本次成功率</span></div>
+            <div><b class="num" id="rateBase">100%</b><span>基础概率</span></div>
+            <div><b class="num" id="failTxt">必成</b><span id="failHint">本档必成</span></div>
+          </div>
+          <div class="costs" id="costRow"></div>
+          <div class="btn-row" style="justify-content:center">
+            <button type="button" class="btn" id="btnCharm">使用幸运符 · 关</button>
+          </div>
+          <button type="button" class="btn gold btn-amp" id="btnAmp">增 幅</button>
+          <div class="auto-box">
+            <div class="auto-head">自动增幅</div>
+            <p class="hint">按同样概率替你连点，不播动画。开了幸运符且该档可用时也会消耗。</p>
+            <div class="form-grid auto-grid">
+              <label>增幅到
+                <input type="number" id="autoTarget" min="1" max="20" value="7" />
+              </label>
+              <label>间隔毫秒
+                <input type="number" id="autoDelay" min="0" max="2000" value="180" />
+              </label>
+              <label>破坏后
+                <select id="autoDestroy">
+                  <option value="replace">换下一件同类型</option>
+                  <option value="stop">停止</option>
+                </select>
+              </label>
+            </div>
+            <div class="btn-row" style="justify-content:center;margin-bottom:0">
+              <button type="button" class="btn gold" id="btnAuto">开始自动</button>
+              <button type="button" class="btn" id="btnStop">停止</button>
+            </div>
+          </div>
+          <div class="btn-row" style="justify-content:center;margin-top:14px">
+            <button type="button" class="btn gold" data-go-tab="swap">去做置换</button>
+            <button type="button" class="btn" data-go-tab="calc">去看演算</button>
+          </div>
+        </div>
+
+        <div class="side">
+          <h2>本次概率</h2>
+          <p class="hint" id="oddsHint">独立随机。没有垫刀，也没有伪随机补偿。</p>
+          <h2>增幅记录</h2>
+          <div id="log" class="history"></div>
+        </div>
+      </div>
+    </section>
+
+    <section id="panel-swap" class="panel">
+      <h2>增幅等级置换</h2>
+      <p class="hint">增幅机上的胚子等级必须高于目标装备才能互换。互换后双方对调，这件胚子留在背包里。</p>
+      <p class="hint" id="swapPickHint"></p>
+      <div class="slots" id="slotGrid"></div>
+      <div class="btn-row" style="margin-top:16px">
+        <button type="button" class="btn gold" id="btnSwap">与选中部位置换</button>
+        <button type="button" class="btn" data-go-tab="amp">回增幅机</button>
+      </div>
+    </section>
+
+    <section id="panel-calc" class="panel">
+      <h2>期望消耗演算</h2>
+      <p class="hint">按单次概率独立抽样。破坏后换新胚子从 0 重来，直到摸到目标。中位数比平均数更接近普通人的花费。</p>
+      <div class="preset-grid" id="mcPresets"></div>
+      <div class="form-grid">
+        <label>胚子类型
+          <select id="mcType">
+            <option value="weapon">武器</option>
+            <option value="gear">非武器</option>
+          </select>
+        </label>
+        <label>起始等级
+          <input type="number" id="mcStart" min="0" max="19" value="0" />
+        </label>
+        <label>目标等级
+          <input type="number" id="mcTarget" min="1" max="20" value="10" />
+        </label>
+        <label>模拟次数
+          <select id="mcRuns"></select>
+        </label>
+      </div>
+      <div class="btn-row">
+        <button type="button" class="btn" id="btnMcCharm">演算用幸运符 · 关</button>
+        <button type="button" class="btn gold" id="btnMc">计算期望</button>
+      </div>
+      <div class="metric" id="mcOut"></div>
+    </section>
+
+    <section id="panel-rules" class="panel">
+      <h2>模拟规则</h2>
+      <div class="rules">
+        <p><b>对象</b>：装备不能直接增幅，只打次元灵驿，再把等级置换到身上。</p>
+        <p><b>三种结果</b>：成功 +1；失败按档位降级或破坏。没有「维持」。破坏则胚子消失且不返还材料。0～3 必成；4～6 失败降 1 级；7～9 失败降 3 级；10 起失败破坏。</p>
+        <p><b>幸运符</b>：+4 起可用。12 级前 +5%，12 上 13 起基础 20%、带符 22%。</p>
+        <p><b>置换</b>：部位对应（武器胚子只能换武器），且胚子等级必须更高。互换后对调，胚子留下。</p>
+        <p><b>矛盾消耗</b>：按规则表逐档扣除。灰色行为估算值。金币按矛盾×2000 计算。</p>
+        <p><b>随机</b>：每次独立抽样，无垫刀、无补偿池。</p>
+      </div>
+      <div class="value-table-wrap">
+        <table class="value-table" id="offTable"></table>
+      </div>
+    </section>
+
+    <footer class="note">
+      <p>公益开源 · 仅供娱乐</p>
+      <p>灰色消耗为估算，细节见规则页</p>
+    </footer>
+  </div>
+
+  <div class="toast" id="toast"></div>
+  <div class="amp-overlay" id="ampOverlay" hidden>
+    <div class="amp-overlay-bg" id="ampOverlayBg"></div>
+    <div class="amp-anim" id="ampAnim">
+      <div class="amp-rings">
+        <i></i><i></i><i></i>
+      </div>
+      <div class="amp-anim-title">增幅中</div>
+      <div class="amp-anim-meta" id="ampAnimMeta"></div>
+      <button type="button" class="btn" id="btnSkipAnim">跳过动画</button>
+    </div>
+    <div class="amp-result" id="ampResult" hidden>
+      <div class="amp-flash" aria-hidden="true"></div>
+      <div class="amp-halo" aria-hidden="true"></div>
+      <div class="amp-halo amp-halo-b" aria-hidden="true"></div>
+      <div class="amp-bloom" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i></div>
+      <div class="amp-burst" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+      <div class="amp-sparks" id="ampSparks" aria-hidden="true"></div>
+      <div class="amp-result-card" id="ampResultCard">
+        <div class="amp-result-seal" id="ampResultSeal"></div>
+        <div class="amp-result-eyebrow" id="ampResultEyebrow">增幅结果</div>
+        <div class="amp-result-title" id="ampResultTitle"></div>
+        <div class="amp-result-lv num" id="ampResultLv">
+          <span id="ampResultFrom"></span>
+          <em id="ampResultArrow">→</em>
+          <span id="ampResultTo"></span>
+        </div>
+        <div class="amp-result-meta" id="ampResultMeta"></div>
+        <button type="button" class="btn gold" id="btnCloseResult">确定</button>
+      </div>
+    </div>
+  </div>
+  <script src="js/config.js"></script>
+  <script src="js/data.js"></script>
+  <script src="js/engine.js"></script>
+  <script src="js/sfx.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

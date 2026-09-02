@@ -1,0 +1,8 @@
+{
+  "code-runner.executorMap": {
+    "html": "cmd /c start \"\" \"$fullFileName\""
+  },
+  "code-runner.executorMapByFileExtension": {
+    ".html": "cmd /c start \"\" \"$fullFileName\""
+  }
+}
