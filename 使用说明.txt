@@ -1,5 +1,8 @@
 DNF 手游 · 增幅机 v1.2 · 使用方法
 
+在线地址：
+https://hyulee-newbee123.github.io/dnf-zengfu-sim/
+
 本机使用：
 1. 双击「打开模拟器.bat」，或用 Chrome / Edge 打开 index.html
 2. 点一下页面后才会出声
@@ -14,4 +17,4 @@ DNF 手游 · 增幅机 v1.2 · 使用方法
 
 改数值：打开 js/config.js，成功率、失败后果、幸运符、矛盾、光色、动画、演算默认值都在里面。
 
-仅供娱乐。
+作者 李积极。公益开源，仅供娱乐。
