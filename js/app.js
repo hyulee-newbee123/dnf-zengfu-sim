@@ -350,7 +350,6 @@
     sfx("stopCharge");
     byId("ampAnim").hidden = false;
     byId("ampResult").hidden = true;
-    byId("ampSparks").innerHTML = "";
     state.fusing = false;
     clearTimeout(closeAmpOverlay._t);
     render();
@@ -370,23 +369,6 @@
     return '<svg viewBox="0 0 46 46" fill="none"><circle cx="23" cy="23" r="20" stroke="currentColor" stroke-width="1.6"/><path d="M23 12v14" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/><path d="M16 24l7 9 7-9" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>';
   }
 
-  function fillSparks(kind, glow) {
-    const n = glow === "glow-prism" ? C.anim.sparkPrism
-      : glow === "glow-gold" ? C.anim.sparkGold
-      : kind === "success" ? C.anim.sparkSuccess
-      : kind === "destroy" ? C.anim.sparkDestroy
-      : C.anim.sparkFail;
-    const prism = C.anim.prismColors;
-    let html = "";
-    for (let i = 0; i < n; i++) {
-      const tint = glow === "glow-prism" ? ";color:" + prism[i % prism.length] : "";
-      html += '<i style="left:' + (6 + Math.random() * 88).toFixed(1) +
-        '%;animation-delay:' + (0.05 + Math.random() * 0.55).toFixed(2) +
-        's;--s:' + (0.55 + Math.random() * 0.9).toFixed(2) + tint + '"></i>';
-    }
-    byId("ampSparks").innerHTML = html;
-  }
-
   function showAmpResult(payload) {
     const overlay = byId("ampOverlay");
     const kind = payload.result;
@@ -403,7 +385,6 @@
     byId("ampResultArrow").textContent = payload.arrow || "→";
     byId("ampResultTo").textContent = payload.toText;
     byId("ampResultMeta").innerHTML = payload.meta;
-    fillSparks(kind, glow);
     sfx("stopCharge");
     sfx(kind === "success" ? "success" : kind === "destroy" ? "destroy" : "downgrade");
   }

@@ -104,12 +104,6 @@ window.DNFConfig = {
   /* ---------- 过程动画 ---------- */
   anim: {
     chargeMs: 1400,                   /* 增幅中时长，点跳过会立刻出结果 */
-    sparkSuccess: 18,
-    sparkGold: 48,
-    sparkPrism: 72,
-    sparkFail: 12,
-    sparkDestroy: 16,
-    prismColors: ["#ff6b9a", "#ffb86b", "#ffe38a", "#7dffb0", "#7ec8ff", "#d4a0ff"],
   },
 
   /* ---------- 演算 ---------- */
