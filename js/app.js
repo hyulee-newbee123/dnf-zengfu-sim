@@ -51,9 +51,9 @@
     return document.getElementById(id);
   }
 
-  function sfx(name, arg) {
+  function sfx(name, a, b) {
     const api = window.Sfx;
-    if (api && typeof api[name] === "function") api[name](arg);
+    if (api && typeof api[name] === "function") api[name](a, b);
   }
 
   function toast(msg, kind) {
@@ -253,6 +253,7 @@
     const cur = selected();
     const charmOn = state.useCharm;
 
+    if (state.fusing && byId("ampOverlay") && byId("ampOverlay").hidden) state.fusing = false;
     if (!cur) {
       byId("eqSvg").innerHTML = iconSvg(true, true);
       byId("eqIcon").className = "altar empty";
@@ -307,6 +308,7 @@
          <div class="cost">金币 <strong class="num">${fmt(cost.gold)}</strong></div>
          <div class="cost">幸运符 <strong class="num">${cost.charm}</strong></div>`;
 
+    if (state.fusing && byId("ampOverlay") && byId("ampOverlay").hidden) state.fusing = false;
     byId("btnAmp").disabled = from >= D.MAX_LEVEL || state.fusing || state.auto;
     const slot = D.SLOTS.find((s) => s.id === state.selectedSlot);
     byId("btnSwap").disabled = !slot || slot.weapon !== cur.weapon || from <= state.gear[slot.id];
@@ -386,7 +388,8 @@
     byId("ampResultTo").textContent = payload.toText;
     byId("ampResultMeta").innerHTML = payload.meta;
     sfx("stopCharge");
-    sfx(kind === "success" ? "success" : kind === "destroy" ? "destroy" : "downgrade");
+    state.fusing = false;
+    render();
   }
 
   function playAmpSequence(payload) {
@@ -396,7 +399,9 @@
     byId("ampAnim").hidden = false;
     byId("ampResult").hidden = true;
     byId("ampAnimMeta").textContent = payload.animMeta;
+    sfx("unlock");
     sfx("charge", C.anim.chargeMs);
+    sfx("armResult", payload.result, C.anim.chargeMs);
     clearTimeout(closeAmpOverlay._t);
     closeAmpOverlay._t = setTimeout(() => showAmpResult(payload), C.anim.chargeMs);
     overlay._payload = payload;
@@ -406,7 +411,11 @@
     if (byId("ampResult").hidden === false) return;
     clearTimeout(closeAmpOverlay._t);
     sfx("stopCharge");
-    if (byId("ampOverlay")._payload) showAmpResult(byId("ampOverlay")._payload);
+    const payload = byId("ampOverlay")._payload;
+    if (payload) {
+      sfx("playResult", payload.result);
+      showAmpResult(payload);
+    }
   }
 
   function pickEmbryo(id) {
@@ -473,7 +482,11 @@
 
   function amplifyOnce(opts) {
     const silent = opts && opts.silent;
-    if (!silent && state.fusing) return { result: "busy" };
+    if (!silent) sfx("unlock");
+    if (!silent && state.fusing) {
+      if (byId("ampOverlay") && !byId("ampOverlay").hidden) return { result: "busy" };
+      state.fusing = false;
+    }
     const cur = selected();
     if (!cur) {
       toast("先在背包里选一件放进增幅机", "deny");
@@ -698,6 +711,10 @@
     byId("btnAmp").onclick = () => amplifyOnce();
     byId("btnSkipAnim").onclick = skipAmpAnim;
     byId("btnCloseResult").onclick = closeAmpOverlay;
+    byId("btnCloseResult").addEventListener("touchend", (ev) => {
+      ev.preventDefault();
+      closeAmpOverlay();
+    }, { passive: false });
     byId("ampOverlayBg").onclick = () => {
       if (byId("ampResult").hidden) skipAmpAnim();
       else closeAmpOverlay();

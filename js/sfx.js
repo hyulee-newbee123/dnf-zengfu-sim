@@ -12,6 +12,7 @@
   let audio = null;
   let master = null;
   let chargeNodes = [];
+  let armedNodes = [];
   let bgm = null;
   const saved = localStorage.getItem(KEY);
   let level = LEVELS.findIndex((x) => x.id === saved);
@@ -72,10 +73,7 @@
   function whenReady(fn) {
     const c = boot();
     if (!c || vol() < 0.001) return;
-    if (c.state === "suspended") {
-      c.resume().then(() => { if (vol() > 0.001 && audio) fn(); }).catch(() => {});
-      return;
-    }
+    if (c.state === "suspended") c.resume();
     fn();
   }
 
@@ -114,24 +112,39 @@
     });
   }
 
-  function playNotes(list, gap, dur, peak, type) {
-    whenReady(() => {
-      const t0 = audio.currentTime + 0.012;
-      list.forEach((freq, i) => {
-        const t = t0 + i * gap;
-        const o = audio.createOscillator();
-        o.type = type || "triangle";
-        o.frequency.setValueAtTime(freq, t);
-        const g = audio.createGain();
-        g.gain.setValueAtTime(0.0001, t);
-        g.gain.exponentialRampToValueAtTime(peak, t + 0.018);
-        g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-        o.connect(g);
-        g.connect(master);
-        o.start(t);
-        o.stop(t + dur + 0.04);
-      });
+  function playNotes(list, gap, dur, peak, type, t0) {
+    list.forEach((freq, i) => {
+      const t = t0 + i * gap;
+      const o = audio.createOscillator();
+      o.type = type || "triangle";
+      o.frequency.setValueAtTime(freq, t);
+      const g = audio.createGain();
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(peak, t + 0.018);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+      o.connect(g);
+      g.connect(master);
+      o.start(t);
+      o.stop(t + dur + 0.04);
+      armedNodes.push({ osc: o, gain: g });
     });
+  }
+
+  function stopArmed() {
+    if (!audio || !armedNodes.length) return;
+    const t = audio.currentTime;
+    armedNodes.forEach((n) => {
+      try {
+        if (n.gain) {
+          n.gain.gain.cancelScheduledValues(t);
+          n.gain.gain.setTargetAtTime(0.0001, t, 0.015);
+        }
+        if (n.osc) n.osc.stop(t + 0.04);
+      } catch {
+        /* already stopped */
+      }
+    });
+    armedNodes = [];
   }
 
   function stopCharge() {
@@ -215,10 +228,10 @@
     });
   }
 
-  function levelUp() {
-    playNotes([523.25, 659.25, 783.99, 1046.5], 0.085, 0.32, 0.17, "triangle");
-    whenReady(() => {
-      const t = audio.currentTime + 0.28;
+  function resultAt(kind, t0) {
+    if (kind === "success") {
+      playNotes([523.25, 659.25, 783.99, 1046.5], 0.085, 0.32, 0.17, "triangle", t0);
+      const t = t0 + 0.28;
       const o = audio.createOscillator();
       o.type = "sine";
       o.frequency.setValueAtTime(1046.5, t);
@@ -231,38 +244,70 @@
       g.connect(master);
       o.start(t);
       o.stop(t + 0.38);
-    });
-  }
-
-  function sadDown(heavy) {
+      armedNodes.push({ osc: o, gain: g });
+      return;
+    }
+    const heavy = kind === "destroy";
     const seq = heavy
       ? [311.13, 246.94, 196, 146.83]
       : [392, 329.63, 261.63, 196];
-    playNotes(seq, 0.18, 0.48, heavy ? 0.15 : 0.13, "sine");
+    playNotes(seq, 0.18, 0.48, heavy ? 0.15 : 0.13, "sine", t0);
+    const t = t0 + 0.52;
+    const o = audio.createOscillator();
+    o.type = heavy ? "sawtooth" : "triangle";
+    o.frequency.setValueAtTime(heavy ? 92 : 147, t);
+    o.frequency.exponentialRampToValueAtTime(heavy ? 48 : 98, t + 0.46);
+    const g = audio.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(heavy ? 0.14 : 0.08, t + 0.04);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.55);
+    o.connect(g);
+    g.connect(master);
+    o.start(t);
+    o.stop(t + 0.6);
+    armedNodes.push({ osc: o, gain: g });
+  }
+
+  function armResult(kind, delayMs) {
     whenReady(() => {
-      const t = audio.currentTime + 0.52;
-      const o = audio.createOscillator();
-      o.type = heavy ? "sawtooth" : "triangle";
-      o.frequency.setValueAtTime(heavy ? 92 : 147, t);
-      o.frequency.exponentialRampToValueAtTime(heavy ? 48 : 98, t + 0.46);
-      const g = audio.createGain();
-      g.gain.setValueAtTime(0.0001, t);
-      g.gain.exponentialRampToValueAtTime(heavy ? 0.14 : 0.08, t + 0.04);
-      g.gain.exponentialRampToValueAtTime(0.0001, t + 0.55);
-      o.connect(g);
-      g.connect(master);
-      o.start(t);
-      o.stop(t + 0.6);
+      stopArmed();
+      resultAt(kind, audio.currentTime + Math.max(0, Number(delayMs) || 0) / 1000);
     });
   }
+
+  function playResult(kind) {
+    whenReady(() => {
+      stopArmed();
+      resultAt(kind, audio.currentTime + 0.012);
+    });
+  }
+
+  function levelUp() { playResult("success"); }
+  function sadDown(heavy) { playResult(heavy ? "destroy" : "downgrade"); }
 
   const Sfx = {
     label() { return LEVELS[level].label; },
     isOff() { return LEVELS[level].id === "off"; },
     unlock() {
       boot();
+      if (audio && audio.state === "suspended") audio.resume();
+      if (audio && master) {
+        try {
+          const o = audio.createOscillator();
+          const g = audio.createGain();
+          g.gain.value = 0.0001;
+          o.connect(g);
+          g.connect(master);
+          o.start();
+          o.stop(audio.currentTime + 0.04);
+        } catch {
+          /* ignore */
+        }
+      }
       startBgm();
     },
+    armResult,
+    playResult,
     cycle() {
       level = (level + 1) % LEVELS.length;
       localStorage.setItem(KEY, LEVELS[level].id);
