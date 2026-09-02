@@ -91,13 +91,13 @@ window.DNFConfig = {
   ],
 
   /* ---------- 增幅结果弹窗光色 ---------- */
-  /* 成功：按「从哪一级打上去」匹配，后一条覆盖前一条 */
+  /* 成功：按打到的等级匹配，后一条覆盖前一条 */
   resultGlow: [
-    { from: 0, cls: "glow-green" },   /* 0-7 绿 */
-    { from: 8, cls: "glow-violet" },  /* 8-9 紫 */
-    { from: 10, cls: "glow-pink" },   /* 10-11 粉 */
-    { from: 12, cls: "glow-gold" },   /* 12-14 黄 */
-    { from: 15, cls: "glow-prism" },  /* 15+ 彩 */
+    { from: 0, cls: "glow-green" },   /* 到 +1~+7 绿 */
+    { from: 8, cls: "glow-violet" },  /* 到 +8~+9 紫 */
+    { from: 10, cls: "glow-pink" },   /* 到 +10~+11 粉 */
+    { from: 12, cls: "glow-gold" },   /* 到 +12~+14 黄（含 11上12） */
+    { from: 15, cls: "glow-prism" },  /* 到 +15+ 彩 */
   ],
   failGlow: "glow-ash",               /* 失败灰白 */
 

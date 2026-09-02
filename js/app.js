@@ -27,11 +27,18 @@
       weapon: !!weapon,
       level: Number.isNaN(lv) ? 0 : lv,
       crystal: 0,
+      charm: 0,
+      broken: false,
     };
   }
 
+  function isLive(e) {
+    return e && !e.broken;
+  }
+
   function selected() {
-    return state.bag.find((e) => e.id === state.selectedId) || null;
+    const cur = state.bag.find((e) => e.id === state.selectedId) || null;
+    return isLive(cur) ? cur : null;
   }
 
   function $(sel, root = document) {
@@ -44,9 +51,9 @@
     return document.getElementById(id);
   }
 
-  function sfx(name) {
+  function sfx(name, arg) {
     const api = window.Sfx;
-    if (api && typeof api[name] === "function") api[name]();
+    if (api && typeof api[name] === "function") api[name](arg);
   }
 
   function toast(msg, kind) {
@@ -141,6 +148,8 @@
         weapon: !!e.weapon,
         level: Math.max(0, Math.min(D.MAX_LEVEL, Number(e.level) || 0)),
         crystal: Math.max(0, Number(e.crystal) || 0),
+        charm: Math.max(0, Number(e.charm) || 0),
+        broken: !!e.broken,
       }));
       state.selectedId = raw.selectedId || (state.bag[0] && state.bag[0].id) || null;
       state.bagFilter = raw.bagFilter || "all";
@@ -158,14 +167,20 @@
       if (state.bagFilter === "weapon") return e.weapon;
       if (state.bagFilter === "gear") return !e.weapon;
       return true;
-    }).sort((a, b) => b.level - a.level || Number(b.weapon) - Number(a.weapon));
+    }).sort((a, b) => Number(!!a.broken) - Number(!!b.broken) || b.level - a.level || Number(b.weapon) - Number(a.weapon));
   }
 
   function renderBag() {
     const list = visibleBag();
     const w = state.bag.filter((e) => e.weapon).length;
     const g = state.bag.length - w;
-    byId("bagSummary").textContent = state.bag.length + " 件 · 武 " + w + " · 防 " + g;
+    const broken = state.bag.filter((e) => e.broken).length;
+    byId("bagSummary").textContent = state.bag.length + " 件 · 武 " + w + " · 防 " + g + (broken ? " · 损 " + broken : "");
+    const dropBrokenBtn = byId("btnDropBroken");
+    if (dropBrokenBtn) {
+      dropBrokenBtn.disabled = !broken;
+      dropBrokenBtn.textContent = broken ? "分解损坏（" + broken + "）" : "分解损坏";
+    }
     $$("[data-bag-filter]").forEach((btn) => {
       btn.classList.toggle("active", btn.dataset.bagFilter === state.bagFilter);
     });
@@ -174,18 +189,25 @@
       return;
     }
     byId("inventory").innerHTML = list.map((e) => {
-      const on = e.id === state.selectedId;
+      const dead = !!e.broken;
+      const on = !dead && e.id === state.selectedId;
       const vfx = D.vfxStage(e.level);
-      return `<article class="embryo ${e.weapon ? "weapon" : ""} ${on ? "selected" : ""}" data-id="${e.id}">
-        ${on ? '<div class="embryo-ribbon">已选中</div>' : ""}
+      const pickBtn = dead
+        ? ""
+        : `<button type="button" class="btn ${on ? "gold" : ""}" data-act="pick" data-id="${e.id}">${on ? "已上增幅机" : "放进增幅机"}</button>`;
+      return `<article class="embryo ${e.weapon ? "weapon" : ""} ${on ? "selected" : ""} ${dead ? "broken" : ""}" data-id="${e.id}">
+        ${dead ? '<div class="embryo-ribbon dead">已破坏</div>' : on ? '<div class="embryo-ribbon">已选中</div>' : ""}
         <div class="embryo-name">${e.weapon ? "次元灵驿 · 武器" : "次元灵驿 · 非武器"}</div>
         <div class="embryo-lv-row">
           <div class="embryo-lv num">+${e.level}</div>
-          <div class="embryo-cost">已耗矛盾 <b class="num">${fmt(e.crystal || 0)}</b></div>
+          <div class="embryo-cost">
+            <span>已耗矛盾 <b class="num">${fmt(e.crystal || 0)}</b></span>
+            <span>已耗幸运符 <b class="num">${fmt(e.charm || 0)}</b></span>
+          </div>
         </div>
-        <div class="embryo-meta">${attrText(e.level, e.weapon)}${vfx ? " · " + vfx.name : ""}</div>
+        <div class="embryo-meta">${dead ? "已破坏" : attrText(e.level, e.weapon)}${!dead && vfx ? " · " + vfx.name : ""}</div>
         <div class="embryo-actions">
-          <button type="button" class="btn ${on ? "gold" : ""}" data-act="pick" data-id="${e.id}">${on ? "已上增幅机" : "放进增幅机"}</button>
+          ${pickBtn}
           <button type="button" class="btn danger" data-act="drop" data-id="${e.id}">分解</button>
         </div>
       </article>`;
@@ -255,7 +277,7 @@
     const vfx = D.vfxStage(from);
 
     byId("eqSvg").innerHTML = iconSvg(cur.weapon, false);
-    byId("eqIcon").className = "altar " + (cur.weapon ? "weapon " : "gear ") + vfxClass(from);
+    byId("eqIcon").className = "altar " + (cur.weapon ? "weapon " : "gear ") + vfxClass(from) + " " + successGlowClass(from);
     byId("ampLv").textContent = "+" + from;
     byId("ampSub").innerHTML =
       "次元灵驿（" + (cur.weapon ? "武器" : "非武器") + "）" +
@@ -272,7 +294,7 @@
       const rule = D.failRule(from);
       byId("failTxt").textContent = D.failLabel(from);
       byId("failHint").textContent =
-        rule.type === "destroy" ? "失败则胚子消失" :
+        rule.type === "destroy" ? "失败则破坏，留下但不能再放入增幅器" :
         rule.type === "downgrade" ? "失败则掉级" : "本档必成";
     }
 
@@ -325,6 +347,7 @@
     overlay.hidden = true;
     overlay.className = "amp-overlay";
     overlay._payload = null;
+    sfx("stopCharge");
     byId("ampAnim").hidden = false;
     byId("ampResult").hidden = true;
     byId("ampSparks").innerHTML = "";
@@ -367,7 +390,7 @@
   function showAmpResult(payload) {
     const overlay = byId("ampOverlay");
     const kind = payload.result;
-    const glow = kind === "success" ? successGlowClass(payload.from) : C.failGlow;
+    const glow = kind === "success" ? successGlowClass(payload.to) : C.failGlow;
     overlay.className = "amp-overlay show " + glow + (kind === "destroy" ? " dead" : "");
     byId("ampAnim").hidden = true;
     byId("ampResult").hidden = false;
@@ -381,6 +404,7 @@
     byId("ampResultTo").textContent = payload.toText;
     byId("ampResultMeta").innerHTML = payload.meta;
     fillSparks(kind, glow);
+    sfx("stopCharge");
     sfx(kind === "success" ? "success" : kind === "destroy" ? "destroy" : "downgrade");
   }
 
@@ -391,7 +415,7 @@
     byId("ampAnim").hidden = false;
     byId("ampResult").hidden = true;
     byId("ampAnimMeta").textContent = payload.animMeta;
-    sfx("charge");
+    sfx("charge", C.anim.chargeMs);
     clearTimeout(closeAmpOverlay._t);
     closeAmpOverlay._t = setTimeout(() => showAmpResult(payload), C.anim.chargeMs);
     overlay._payload = payload;
@@ -400,12 +424,17 @@
   function skipAmpAnim() {
     if (byId("ampResult").hidden === false) return;
     clearTimeout(closeAmpOverlay._t);
-    sfx("skip");
+    sfx("stopCharge");
     if (byId("ampOverlay")._payload) showAmpResult(byId("ampOverlay")._payload);
   }
 
   function pickEmbryo(id) {
-    if (!state.bag.some((e) => e.id === id)) return;
+    const item = state.bag.find((e) => e.id === id);
+    if (!item) return;
+    if (item.broken) {
+      toast("这件已破坏，不能放进增幅机", "deny");
+      return;
+    }
     state.selectedId = id;
     sfx("tab");
     render();
@@ -422,20 +451,39 @@
     render();
   }
 
-  function destroySelected() {
-    const cur = selected();
+  function dropBroken() {
+    const n = state.bag.filter((e) => e.broken).length;
+    if (!n) {
+      toast("没有已破坏的胚子", "deny");
+      return;
+    }
+    state.bag = state.bag.filter((e) => !e.broken);
+    if (state.selectedId && !state.bag.some((e) => e.id === state.selectedId)) {
+      const live = state.bag.find((e) => !e.broken) || state.bag[0];
+      state.selectedId = live ? live.id : null;
+    }
+    log("分解了 " + n + " 件已破坏胚子");
+    toast("已分解损坏 " + n + " 件");
+    sfx("downgrade");
+    render();
+  }
+
+  function retireDestroyed() {
+    const cur = state.bag.find((e) => e.id === state.selectedId);
     if (!cur) return;
+    cur.broken = true;
     const kind = cur.weapon;
-    state.bag = state.bag.filter((e) => e.id !== cur.id);
     if (!selectNext(kind)) {
-      state.selectedId = state.bag[0] ? state.bag[0].id : null;
+      const live = state.bag.find((e) => !e.broken);
+      state.selectedId = live ? live.id : null;
     }
     return kind;
   }
 
   function selectNext(weapon) {
-    const same = state.bag.filter((e) => e.weapon === weapon);
-    const pool = same.length ? same : state.bag;
+    const live = state.bag.filter((e) => !e.broken);
+    const same = live.filter((e) => e.weapon === weapon);
+    const pool = same.length ? same : live;
     const next = pool.slice().sort((a, b) => a.level - b.level)[0];
     if (!next) return false;
     state.selectedId = next.id;
@@ -459,6 +507,7 @@
     const charm = state.useCharm && D.canUseCharm(from);
     const cost = E.attemptCost(from, cur.weapon, charm);
     cur.crystal = (cur.crystal || 0) + cost.crystal;
+    cur.charm = (cur.charm || 0) + (cost.charm || 0);
 
     const out = E.roll(from, charm);
     let payload = null;
@@ -470,6 +519,7 @@
         title: "成功",
         tag: "增幅成功",
         from: from,
+        to: out.to,
         fromText: "+" + from,
         toText: "+" + out.to,
         arrow: "→",
@@ -491,19 +541,19 @@
         animMeta: kindName + " +" + from + " → +" + (from + 1),
       };
     } else if (out.result === "destroy") {
-      log(`<span class="dead">破坏</span> ${kindName} +${from} 从背包消失，材料不返还　成功率 ${out.rate}%`);
+      log(`<span class="dead">破坏</span> ${kindName} +${from} 留下，不能再放入增幅器　成功率 ${out.rate}%`);
       payload = {
         result: "destroy",
         title: "破坏",
-        tag: "增幅失败 · 胚子消失",
+        tag: "增幅失败 · 胚子破坏",
         from: from,
         fromText: "+" + from,
         toText: "破碎",
         arrow: "×",
-        meta: kindName + "次元灵驿从背包消失　成功率 " + out.rate + "%<br>材料不返还",
+        meta: kindName + "次元灵驿留下，不能再放入增幅器　成功率 " + out.rate + "%<br>材料不返还",
         animMeta: kindName + " +" + from + " → +" + (from + 1),
       };
-      destroySelected();
+      retireDestroyed();
     }
     if (!silent && payload) state.fusing = true;
     render();
@@ -699,6 +749,7 @@
       render();
       autoTick();
     };
+    byId("btnDropBroken").onclick = dropBroken;
     byId("btnClear").onclick = () => {
       if (!confirm("清空背包和身上增幅？")) return;
       state.bag = [];
@@ -718,6 +769,8 @@
         return;
       }
       const id = (act && act.dataset.id) || (card && card.dataset.id);
+      const item = id && state.bag.find((e) => e.id === id);
+      if (item && item.broken) return;
       if (id) pickEmbryo(id);
     });
 
@@ -761,12 +814,16 @@
       sfxBtn.textContent = window.Sfx.cycle();
       sfxBtn.classList.toggle("is-off", window.Sfx.isOff());
     };
-    document.addEventListener("pointerdown", () => { if (window.Sfx) window.Sfx.tab(); }, { once: true });
+    document.addEventListener("pointerdown", () => {
+      if (!window.Sfx) return;
+      window.Sfx.unlock();
+      window.Sfx.tab();
+    }, { once: true });
   }
 
   bind();
   load();
   renderTable();
   render();
-  log("点背包里的胚子放进增幅机，再增幅。破坏后这件会从背包消失。");
+  log("点背包里的胚子放进增幅机，再增幅。破坏后这件留下，但不能再放入增幅器。");
 })();

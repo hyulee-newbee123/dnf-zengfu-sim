@@ -70,7 +70,7 @@
     const rule = failRule(from);
     if (rule.type === "none") return "本档 100% 成功";
     if (rule.type === "downgrade") return "失败降 " + rule.drop + " 级";
-    return "破坏（胚子消失，无返还）";
+    return "破坏（留下但不能再放入增幅器，无返还）";
   }
 
   const CRYSTAL_SOURCE = C.crystalWeapon.map((_, i) =>

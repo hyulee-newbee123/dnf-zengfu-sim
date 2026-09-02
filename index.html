@@ -39,11 +39,12 @@
             <span class="bag-summary" id="bagSummary"></span>
             <button type="button" class="btn danger" id="btnClear">清空</button>
           </div>
-          <p class="hint">点一件放进增幅机再打。破坏后这件从背包消失。</p>
+          <p class="hint">点一件放进增幅机再打。破坏后这件留下，但不能再放入增幅器。</p>
           <div class="bag-filters">
             <button type="button" class="btn active" data-bag-filter="all">全部</button>
             <button type="button" class="btn" data-bag-filter="weapon">武器</button>
             <button type="button" class="btn" data-bag-filter="gear">非武器</button>
+            <button type="button" class="btn danger" id="btnDropBroken" disabled>分解损坏</button>
           </div>
           <div class="btn-row gen-row">
             <label class="gen-lv">等级
@@ -57,7 +58,7 @@
 
         <div class="forge" id="stage">
           <div class="forge-title">增幅机</div>
-          <p class="hint">只打背包里选中的那一件。没选中时先点左侧胚子。失败从 +10 起会破坏并移出背包。</p>
+          <p class="hint">只打背包里选中的那一件。没选中时先点左侧胚子。失败从 +10 起会破坏，胚子留下但不能再放入增幅器。</p>
           <div class="result-pop" id="pop"></div>
           <div class="altar empty" id="eqIcon">
             <div class="altar-marquee" aria-hidden="true">
@@ -162,7 +163,7 @@
       <h2>模拟规则</h2>
       <div class="rules">
         <p><b>对象</b>：装备不能直接增幅，只打次元灵驿，再把等级置换到身上。</p>
-        <p><b>三种结果</b>：成功 +1；失败按档位降级或破坏。没有「维持」。破坏则胚子消失且不返还材料。0～3 必成；4～6 失败降 1 级；7～9 失败降 3 级；10 起失败破坏。</p>
+        <p><b>三种结果</b>：成功 +1；失败按档位降级或破坏。没有「维持」。破坏后胚子留在背包，不能再放进增幅机，材料不返还。0～3 必成；4～6 失败降 1 级；7～9 失败降 3 级；10 起失败破坏。</p>
         <p><b>幸运符</b>：+4 起可用。12 级前 +5%，12 上 13 起基础 20%、带符 22%。</p>
         <p><b>置换</b>：部位对应（武器胚子只能换武器），且胚子等级必须更高。互换后对调，胚子留下。</p>
         <p><b>矛盾消耗</b>：按规则表逐档扣除。灰色行为估算值。金币按矛盾×2000 计算。</p>
@@ -174,8 +175,10 @@
     </section>
 
     <footer class="note">
+      <p class="note-author">作者 李积极</p>
+      <p><a href="https://space.bilibili.com/330288867" target="_blank" rel="noopener noreferrer">Bilibili：李积极玩游戏</a> · UID 330288867</p>
+      <p>抖音：哇他洗哇 · 抖音号 926920998</p>
       <p>公益开源 · 仅供娱乐</p>
-      <p>灰色消耗为估算，细节见规则页</p>
     </footer>
   </div>
 
