@@ -63,6 +63,31 @@ assert(sim.reached && sim.crystal === 35 + 53 + 73 + 97, "0→4 guaranteed cryst
 const mc = E.monteCarlo({ start: 0, target: 4, useCharm: false, runs: 200 });
 assert(mc.reachRate === 1, "0→4 always reaches");
 assert(Math.round(mc.crystal.mean) === 258, "0→4 mean crystals 258");
+assert(mc.charm.mean === 0, "0→4 no charm");
+
+const alwaysOk = () => 0.001;
+const evSafe = E.expectedToTarget({ start: 0, target: 4, isWeapon: true, useCharm: false });
+assert(Math.round(evSafe.crystal) === 258 && evSafe.charm === 0, "EV 0→4 crystal 258");
+
+const advice = E.adviseFullSet({
+  target: 10,
+  crystalTera: 200,
+  charmTera: 13000,
+  weaponSlots: 1,
+  gearSlots: 11,
+});
+assert(advice.best && Number.isFinite(advice.best.tera), "full-set advice has tera");
+assert(advice.best.tera <= advice.noCharm.tera, "best is not worse than no charm");
+
+const skipCharm = E.simulateToTarget({
+  start: 0, target: 5, useCharm: true, charmFrom: 5, rng: alwaysOk,
+});
+assert(skipCharm.reached && skipCharm.charm === 0, "charmFrom 5 skips 4→5");
+
+const fromFive = E.simulateToTarget({
+  start: 0, target: 6, useCharm: true, charmFrom: 5, rng: alwaysOk,
+});
+assert(fromFive.reached && fromFive.charm === 1, "charmFrom 5 uses once at 5→6");
 
 if (failed) {
   console.error(failed + " failed");

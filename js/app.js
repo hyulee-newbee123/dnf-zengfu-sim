@@ -14,6 +14,7 @@
     fusing: false,
     useCharm: false,
     mcCharm: false,
+    spent: { crystal: 0, charm: 0 },
   };
 
   function uid() {
@@ -136,6 +137,7 @@
       gear: state.gear,
       useCharm: state.useCharm,
       mcCharm: state.mcCharm,
+      spent: state.spent,
     }));
   }
 
@@ -156,6 +158,17 @@
       state.gear = { ...state.gear, ...(raw.gear || {}) };
       state.useCharm = !!raw.useCharm;
       state.mcCharm = !!raw.mcCharm;
+      if (raw.spent) {
+        state.spent = {
+          crystal: Math.max(0, Number(raw.spent.crystal) || 0),
+          charm: Math.max(0, Number(raw.spent.charm) || 0),
+        };
+      } else {
+        state.spent = {
+          crystal: state.bag.reduce((n, e) => n + (e.crystal || 0), 0),
+          charm: state.bag.reduce((n, e) => n + (e.charm || 0), 0),
+        };
+      }
       return true;
     } catch {
       return false;
@@ -217,18 +230,18 @@
   function renderSlots() {
     byId("slotGrid").innerHTML = D.SLOTS.map((s) => {
       const on = state.selectedSlot === s.id ? " active" : "";
-      return `<button type="button" class="slot${on}" data-slot="${s.id}">
+      const lv = state.gear[s.id] || 0;
+      return `<article class="slot${on}" data-slot="${s.id}">
         <div class="n">${s.name}</div>
-        <div class="lv num">+${state.gear[s.id]}</div>
-      </button>`;
+        <label class="slot-lv">
+          <span>+</span>
+          <input type="number" min="0" max="${D.MAX_LEVEL}" value="${lv}" data-gear-lv="${s.id}" />
+        </label>
+        <button type="button" class="btn gold" data-slot-pick="${s.id}">置换</button>
+      </article>`;
     }).join("");
-    const cur = selected();
     const hint = byId("swapPickHint");
-    if (hint) {
-      hint.textContent = cur
-        ? "当前选中：" + (cur.weapon ? "武器" : "非武器") + "胚子 +" + cur.level
-        : "还没选胚子。先回增幅页在背包里点一件放进增幅机。";
-    }
+    if (hint) hint.textContent = "点每个部位上的「置换」从背包选胚子。等级可直接改。";
   }
 
   function renderCharmButtons(usable) {
@@ -265,7 +278,6 @@
       byId("failHint").textContent = "先选胚子";
       byId("costRow").innerHTML = '<div class="cost">增幅机是空的</div>';
       byId("btnAmp").disabled = true;
-      byId("btnSwap").disabled = true;
       renderCharmButtons(false);
       return;
     }
@@ -310,8 +322,6 @@
 
     if (state.fusing && byId("ampOverlay") && byId("ampOverlay").hidden) state.fusing = false;
     byId("btnAmp").disabled = from >= D.MAX_LEVEL || state.fusing || state.auto;
-    const slot = D.SLOTS.find((s) => s.id === state.selectedSlot);
-    byId("btnSwap").disabled = !slot || slot.weapon !== cur.weapon || from <= state.gear[slot.id];
   }
 
   function renderTable() {
@@ -335,10 +345,18 @@
     byId("offTable").innerHTML = rows.join("");
   }
 
+  function renderSpent() {
+    const crystal = byId("spentCrystal");
+    const charm = byId("spentCharm");
+    if (crystal) crystal.textContent = fmt(state.spent.crystal || 0);
+    if (charm) charm.textContent = fmt(state.spent.charm || 0);
+  }
+
   function render() {
     renderBag();
     renderSlots();
     renderStage();
+    renderSpent();
     const cur = selected();
     if (cur) renderCharmButtons(D.canUseCharm(cur.level));
     save();
@@ -498,10 +516,15 @@
     }
     const from = cur.level;
     const kindName = cur.weapon ? "武器" : "非武器";
-    const charm = state.useCharm && D.canUseCharm(from);
+    const wantCharm = opts && Object.prototype.hasOwnProperty.call(opts, "useCharm")
+      ? !!opts.useCharm
+      : state.useCharm;
+    const charm = wantCharm && D.canUseCharm(from);
     const cost = E.attemptCost(from, cur.weapon, charm);
     cur.crystal = (cur.crystal || 0) + cost.crystal;
     cur.charm = (cur.charm || 0) + (cost.charm || 0);
+    state.spent.crystal = (state.spent.crystal || 0) + cost.crystal;
+    state.spent.charm = (state.spent.charm || 0) + (cost.charm || 0);
 
     const out = E.roll(from, charm);
     let payload = null;
@@ -555,11 +578,53 @@
     return out;
   }
 
-  function swap() {
-    const cur = selected();
+  function closeSwapPick() {
+    const overlay = byId("swapOverlay");
+    if (!overlay) return;
+    overlay.hidden = true;
+    overlay.classList.remove("show");
+  }
+
+  function openSwapPick(slotId) {
+    const slot = D.SLOTS.find((s) => s.id === slotId);
+    if (!slot) return;
+    state.selectedSlot = slotId;
+    const gearLv = state.gear[slot.id] || 0;
+    const kind = slot.weapon ? "武器" : "非武器";
+    byId("swapPickTitle").textContent = "置换" + slot.name;
+    byId("swapPickSub").textContent = "身上 +" + gearLv + " · 选一件更高的" + kind + "胚子";
+    const list = state.bag
+      .filter((e) => isLive(e) && e.weapon === slot.weapon && e.level > gearLv)
+      .sort((a, b) => b.level - a.level || (b.crystal || 0) - (a.crystal || 0));
+    const box = byId("swapPickList");
+    if (!list.length) {
+      box.innerHTML = '<p class="hint">没有高于 +' + gearLv + " 的" + kind + "胚子。损坏件和等级不够的都不会出现。</p>";
+    } else {
+      box.innerHTML = list.map((e) => {
+        return `<article class="embryo ${e.weapon ? "weapon" : ""}" data-swap-id="${e.id}">
+          <div class="embryo-name">${e.weapon ? "次元灵驿 · 武器" : "次元灵驿 · 非武器"}</div>
+          <div class="embryo-lv-row">
+            <div class="embryo-lv num">+${e.level}</div>
+            <div class="embryo-cost">换上后胚子变 +${gearLv}</div>
+          </div>
+          <div class="embryo-actions">
+            <button type="button" class="btn gold" data-swap-do="${e.id}">置换</button>
+          </div>
+        </article>`;
+      }).join("");
+    }
+    const overlay = byId("swapOverlay");
+    overlay.hidden = false;
+    overlay.classList.add("show");
+    sfx("tab");
+    renderSlots();
+  }
+
+  function swapWith(embryoId) {
+    const cur = state.bag.find((e) => e.id === embryoId);
     const slot = D.SLOTS.find((s) => s.id === state.selectedSlot);
-    if (!cur) {
-      toast("先选背包里的胚子", "deny");
+    if (!cur || cur.broken) {
+      toast("这件不能置换", "deny");
       return;
     }
     if (!slot) return;
@@ -575,9 +640,13 @@
     const target = state.gear[slot.id];
     state.gear[slot.id] = old;
     cur.level = target;
+    cur.crystal = 0;
+    cur.charm = 0;
+    state.selectedId = cur.id;
     sfx("success");
     log(`<span class="swap">置换</span> ${slot.name} 变为 +${old}，背包胚子变为 +${target}`);
     toast(slot.name + " +" + old);
+    closeSwapPick();
     render();
   }
 
@@ -622,7 +691,11 @@
       return;
     }
     const kind = cur.weapon;
-    const out = amplifyOnce({ silent: true });
+    const charmFrom = clampNum(byId("autoCharmFrom").value, 0, D.MAX_LEVEL);
+    const out = amplifyOnce({
+      silent: true,
+      useCharm: state.useCharm && cur.level >= charmFrom,
+    });
     if (out.result === "poor" || out.result === "full") {
       stopAuto();
       return;
@@ -646,27 +719,89 @@
     const start = clampNum(byId("mcStart").value, 0, D.MAX_LEVEL - 1);
     const target = clampNum(byId("mcTarget").value, 1, D.MAX_LEVEL);
     const runs = clampNum(byId("mcRuns").value, C.monteCarlo.minRuns, C.monteCarlo.maxRuns);
+    const charmFrom = clampNum(byId("mcCharmFrom").value, 0, D.MAX_LEVEL);
     if (target <= start) {
       toast("目标必须高于起始等级", "deny");
       return;
     }
     byId("mcOut").innerHTML = "<p class='hint'>计算中…</p>";
+    const adviceBox = byId("mcAdvice");
+    adviceBox.hidden = true;
+    adviceBox.innerHTML = "";
     sfx("calc");
     setTimeout(() => {
       const r = E.monteCarlo({
-        start, target, isWeapon, useCharm: state.mcCharm, runs,
+        start, target, isWeapon, useCharm: state.mcCharm, charmFrom, runs,
       });
       byId("mcOut").innerHTML = [
         ["达成率", (r.reachRate * 100).toFixed(1) + "%"],
         ["矛盾中位数", fmt(r.crystal.p50)],
         ["矛盾期望", fmt(r.crystal.mean)],
         ["矛盾 P90", fmt(r.crystal.p90)],
+        ["幸运符中位数", fmt(r.charm.p50)],
+        ["幸运符期望", fmt(r.charm.mean)],
         ["胚子中位数", r.embryo.p50.toFixed(1)],
         ["胚子期望", r.embryo.mean.toFixed(2)],
         ["尝试中位数", fmt(r.attempt.p50)],
         ["破坏中位数", r.destroy.p50.toFixed(1)],
       ].map(([k, v]) => `<div class="cell"><span>${k}</span><b class="num">${v}</b></div>`).join("");
+      renderMcAdvice(target);
     }, 30);
+  }
+
+  function fmtTera(n) {
+    if (!Number.isFinite(n)) return "—";
+    if (n >= 10000) return (n / 10000).toFixed(1) + " 万泰拉";
+    return fmt(n) + " 泰拉";
+  }
+
+  function savePct(a, b) {
+    if (!b || !Number.isFinite(a) || !Number.isFinite(b)) return null;
+    return ((b - a) / b) * 100;
+  }
+
+  function renderMcAdvice(target) {
+    const box = byId("mcAdvice");
+    const prices = C.tera || { crystal: 200, charm: 13000 };
+    const weaponSlots = D.SLOTS.filter((s) => s.weapon).length;
+    const gearSlots = D.SLOTS.filter((s) => !s.weapon).length;
+    const advice = E.adviseFullSet({
+      target,
+      crystalTera: prices.crystal,
+      charmTera: prices.charm,
+      weaponSlots,
+      gearSlots,
+    });
+    const best = advice.best;
+    let headline;
+    if (target <= advice.charmMin) {
+      headline = "想上全身 +" + target + " 的话，还在必成附近，幸运符基本用不上。";
+    } else if (best.kind === "none") {
+      headline = "想上全身 +" + target + " 的话，全程不使用幸运符最合适。";
+    } else {
+      headline = "想上全身 +" + target + " 的话，应该在 " + best.charmFrom + " 级前不使用幸运符最合适。";
+    }
+
+    const vsAll = advice.allCharm ? savePct(best.tera, advice.allCharm.tera) : null;
+    const vsNone = savePct(best.tera, advice.noCharm.tera);
+    const cmp = [];
+    if (advice.allCharm && best !== advice.allCharm && vsAll != null && vsAll > 0.3) {
+      cmp.push("比从 +" + advice.charmMin + " 起全程带符大约省 " + vsAll.toFixed(1) + "%");
+    }
+    if (best !== advice.noCharm && vsNone != null && vsNone > 0.3) {
+      cmp.push("比全程不用符大约省 " + vsNone.toFixed(1) + "%");
+    }
+
+    box.hidden = false;
+    box.innerHTML =
+      '<div class="mc-advice-kicker">AI 评测</div>' +
+      '<div class="mc-advice-title">' + headline + "</div>" +
+      '<p>按 <b>' + weaponSlots + " 件武器 + " + gearSlots + " 件防具</b>从 0 打到 +" + target +
+      "，矛盾 <b>" + fmt(prices.crystal) + "</b> 泰拉一个、幸运符 <b>" + fmt(prices.charm) +
+      "</b> 泰拉一个折算。全身期望约 <b class=\"num\">" + fmtTera(best.tera) + "</b>。</p>" +
+      (cmp.length ? "<p>" + cmp.join("；") + "。</p>" : "") +
+      '<p class="hint">按期望值扫开符档，和上面抽样表不是同一套数字。行情按矛盾 ' +
+      fmt(prices.crystal) + "、幸运符 " + fmt(prices.charm) + " 泰拉。</p>";
   }
 
   function goTab(name) {
@@ -686,6 +821,10 @@
     target.min = 1;
     target.max = max;
     target.value = mc.defaultTarget;
+    const mcf = byId("mcCharmFrom");
+    mcf.min = 0;
+    mcf.max = max;
+    mcf.value = mc.defaultCharmFrom;
     byId("mcRuns").innerHTML = mc.runOptions.map((n) =>
       "<option" + (n === mc.defaultRuns ? " selected" : "") + ">" + n + "</option>"
     ).join("");
@@ -701,6 +840,10 @@
     ad.min = 0;
     ad.max = C.auto.maxDelay;
     ad.value = C.auto.defaultDelay;
+    const ac = byId("autoCharmFrom");
+    ac.min = 0;
+    ac.max = max;
+    ac.value = C.auto.defaultCharmFrom;
     const gl = byId("genLevel");
     gl.min = 0;
     gl.max = max;
@@ -719,7 +862,24 @@
       if (byId("ampResult").hidden) skipAmpAnim();
       else closeAmpOverlay();
     };
-    byId("btnSwap").onclick = swap;
+    byId("btnCloseSwapPick").onclick = closeSwapPick;
+    byId("swapOverlayBg").onclick = closeSwapPick;
+    byId("swapPickList").addEventListener("click", (ev) => {
+      const btn = ev.target.closest("[data-swap-do]");
+      const card = ev.target.closest("[data-swap-id]");
+      const id = (btn && btn.dataset.swapDo) || (card && card.dataset.swapId);
+      if (!id || (btn && btn.disabled)) return;
+      const item = state.bag.find((e) => e.id === id);
+      const slot = D.SLOTS.find((s) => s.id === state.selectedSlot);
+      if (!item || !slot || item.level <= (state.gear[slot.id] || 0)) {
+        toast("这件等级不够", "deny");
+        return;
+      }
+      swapWith(id);
+    });
+    document.addEventListener("keydown", (ev) => {
+      if (ev.key === "Escape" && byId("swapOverlay") && !byId("swapOverlay").hidden) closeSwapPick();
+    });
     byId("btnCharm").onclick = () => {
       const cur = selected();
       if (!cur || !D.canUseCharm(cur.level)) {
@@ -749,9 +909,10 @@
     };
     byId("btnDropBroken").onclick = dropBroken;
     byId("btnClear").onclick = () => {
-      if (!confirm("清空背包和身上增幅？")) return;
+      if (!confirm("清空背包、身上增幅和消耗统计？")) return;
       state.bag = [];
       state.selectedId = null;
+      state.spent = { crystal: 0, charm: 0 };
       state.gear = Object.fromEntries(D.SLOTS.map((s) => [s.id, 0]));
       byId("log").innerHTML = "";
       render();
@@ -773,11 +934,18 @@
     });
 
     byId("slotGrid").addEventListener("click", (ev) => {
-      const btn = ev.target.closest("[data-slot]");
+      const btn = ev.target.closest("[data-slot-pick]");
       if (!btn) return;
-      state.selectedSlot = btn.dataset.slot;
-      sfx("tab");
-      render();
+      openSwapPick(btn.dataset.slotPick);
+    });
+    byId("slotGrid").addEventListener("change", (ev) => {
+      const input = ev.target.closest("[data-gear-lv]");
+      if (!input) return;
+      const id = input.dataset.gearLv;
+      const lv = clampNum(input.value, 0, D.MAX_LEVEL);
+      state.gear[id] = lv;
+      input.value = lv;
+      save();
     });
 
     $$("[data-bag-filter]").forEach((btn) => {

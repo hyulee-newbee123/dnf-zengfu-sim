@@ -59,6 +59,8 @@ window.DNFConfig = {
     { id: "necklace", name: "项链", weapon: false },
     { id: "ring", name: "戒指", weapon: false },
     { id: "support", name: "辅助装备", weapon: false },
+    { id: "stone", name: "魔法石", weapon: false },
+    { id: "earring", name: "耳环", weapon: false },
   ],
 
   /* ---------- 属性公式：a * 等级 + b * 等级² ---------- */
@@ -106,10 +108,17 @@ window.DNFConfig = {
     chargeMs: 1400,                   /* 增幅中时长，点跳过会立刻出结果 */
   },
 
+  /* ---------- 拍卖行情（泰拉，演算评测用） ---------- */
+  tera: {
+    crystal: 200,
+    charm: 13000,
+  },
+
   /* ---------- 演算 ---------- */
   monteCarlo: {
     defaultStart: 0,
     defaultTarget: 10,
+    defaultCharmFrom: 4, /* 演算时低于此等级不消耗幸运符 */
     defaultRuns: 3000,
     runOptions: [1000, 3000, 10000],
     minRuns: 200,
@@ -127,5 +136,6 @@ window.DNFConfig = {
     defaultTarget: 7,
     defaultDelay: 180,
     maxDelay: 2000,
+    defaultCharmFrom: 4, /* 自动时低于此等级不消耗幸运符 */
   },
 };

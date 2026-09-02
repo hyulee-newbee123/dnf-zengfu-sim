@@ -18,9 +18,16 @@
       <div class="eyebrow">地下城与勇士手游 · 模拟器</div>
       <div class="hero-title">
         <h1>增幅机</h1>
-        <span class="ver">v1.2</span>
+        <span class="ver">v1.3</span>
       </div>
       <p>成功 / 降级 / 破坏 · 纯属娱乐</p>
+      <div class="hero-spent">
+        <div class="hero-spent-label">消耗统计</div>
+        <div class="wallet-list" id="spentBox">
+          <div class="pill">已消耗矛盾 <span class="num" id="spentCrystal">0</span></div>
+          <div class="pill">已消耗幸运符 <span class="num" id="spentCharm">0</span></div>
+        </div>
+      </div>
     </header>
     <div class="ornament"></div>
 
@@ -85,13 +92,16 @@
           <button type="button" class="btn gold btn-amp" id="btnAmp">增 幅</button>
           <div class="auto-box">
             <div class="auto-head">自动增幅</div>
-            <p class="hint">按同样概率替你连点，不播动画。开了幸运符且该档可用时也会消耗。</p>
+            <p class="hint">按同样概率替你连点，不播动画。开了幸运符时，低于设定等级不会消耗。</p>
             <div class="form-grid auto-grid">
               <label>增幅到
                 <input type="number" id="autoTarget" min="1" max="20" value="7" />
               </label>
               <label>间隔毫秒
                 <input type="number" id="autoDelay" min="0" max="2000" value="180" />
+              </label>
+              <label>几级前不用符
+                <input type="number" id="autoCharmFrom" min="0" max="20" value="4" />
               </label>
               <label>破坏后
                 <select id="autoDestroy">
@@ -122,18 +132,17 @@
 
     <section id="panel-swap" class="panel">
       <h2>增幅等级置换</h2>
-      <p class="hint">增幅机上的胚子等级必须高于目标装备才能互换。互换后双方对调，这件胚子留在背包里。</p>
-      <p class="hint" id="swapPickHint"></p>
+      <p class="hint">点每个部位上的「置换」，从背包里选一件同类型且等级更高的胚子。等级数字可以自己改，方便试。互换后双方对调，胚子留在背包里。</p>
+      <p class="hint" id="swapPickHint">点下面的部位开始选。</p>
       <div class="slots" id="slotGrid"></div>
       <div class="btn-row" style="margin-top:16px">
-        <button type="button" class="btn gold" id="btnSwap">与选中部位置换</button>
         <button type="button" class="btn" data-go-tab="amp">回增幅机</button>
       </div>
     </section>
 
     <section id="panel-calc" class="panel">
       <h2>期望消耗演算</h2>
-      <p class="hint">按单次概率独立抽样。破坏后换新胚子从 0 重来，直到摸到目标。中位数比平均数更接近普通人的花费。</p>
+      <p class="hint">按单次概率独立抽样。破坏后换新胚子从 0 重来，直到摸到目标。开了幸运符时，低于设定等级不会消耗。中位数比平均数更接近普通人的花费。计算后会按全身部位和泰拉行情给一开符建议。</p>
       <div class="preset-grid" id="mcPresets"></div>
       <div class="form-grid">
         <label>胚子类型
@@ -151,12 +160,16 @@
         <label>模拟次数
           <select id="mcRuns"></select>
         </label>
+        <label>几级前不用符
+          <input type="number" id="mcCharmFrom" min="0" max="20" value="4" />
+        </label>
       </div>
       <div class="btn-row">
         <button type="button" class="btn" id="btnMcCharm">演算用幸运符 · 关</button>
         <button type="button" class="btn gold" id="btnMc">计算期望</button>
       </div>
       <div class="metric" id="mcOut"></div>
+      <div class="mc-advice" id="mcAdvice" hidden></div>
     </section>
 
     <section id="panel-rules" class="panel">
@@ -182,6 +195,17 @@
     </footer>
   </div>
 
+  <div class="swap-overlay" id="swapOverlay" hidden>
+    <div class="swap-overlay-bg" id="swapOverlayBg"></div>
+    <div class="swap-pick-card">
+      <div class="swap-pick-head">
+        <h3 id="swapPickTitle">选择胚子</h3>
+        <p class="hint" id="swapPickSub"></p>
+      </div>
+      <div class="swap-pick-list" id="swapPickList"></div>
+      <button type="button" class="btn" id="btnCloseSwapPick">取消</button>
+    </div>
+  </div>
   <div class="toast" id="toast"></div>
   <div class="amp-overlay" id="ampOverlay" hidden>
     <div class="amp-overlay-bg" id="ampOverlayBg"></div>
