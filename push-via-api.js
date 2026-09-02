@@ -4,7 +4,10 @@ const GH = "C:\\Program Files\\GitHub CLI\\gh.exe";
 const REPO = "/repos/hyulee-newbee123/dnf-zengfu-sim";
 
 function git(args, enc = "utf8") {
-  return execFileSync("git", args, { encoding: enc, maxBuffer: 20 * 1024 * 1024 });
+  return execFileSync("git", ["-c", "core.quotepath=false", ...args], {
+    encoding: enc,
+    maxBuffer: 20 * 1024 * 1024,
+  });
 }
 
 function ghApi(method, path, body) {
@@ -37,8 +40,8 @@ function blobsFromCommit(sha) {
     .split(/\r?\n/)
     .filter(Boolean);
   return files.map((path) => {
-    const exists = git(["ls-tree", sha, path]).trim();
-    if (!exists) return { path, mode: "100644", type: "blob", sha: null };
+    const exists = git(["ls-tree", sha, "--", path]).trim();
+    if (!exists) throw new Error("找不到文件 " + path);
     const content = git(["cat-file", "blob", `${sha}:${path}`], "buffer");
     const blob = ghApi("POST", `${REPO}/git/blobs`, {
       content: Buffer.from(content).toString("base64"),
@@ -50,7 +53,11 @@ function blobsFromCommit(sha) {
 
 function pushCommit(sha, parent) {
   const items = blobsFromCommit(sha);
-  const tree = ghApi("POST", `${REPO}/git/trees`, { tree: items });
+  const payload = { tree: items };
+  if (parent) {
+    payload.base_tree = ghApi("GET", `${REPO}/git/commits/${parent}`).tree.sha;
+  }
+  const tree = ghApi("POST", `${REPO}/git/trees`, payload);
   const commit = ghApi("POST", `${REPO}/git/commits`, {
     message: iso(sha, "%B"),
     tree: tree.sha,
