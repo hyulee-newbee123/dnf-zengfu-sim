@@ -127,6 +127,7 @@
     const line = document.createElement("div");
     line.innerHTML = html;
     box.prepend(line);
+    while (box.childNodes.length > 80) box.removeChild(box.lastChild);
   }
 
   function save() {
@@ -139,6 +140,21 @@
       mcCharm: state.mcCharm,
       spent: state.spent,
     }));
+  }
+
+  let saveTimer = 0;
+  function scheduleSave() {
+    if (saveTimer) return;
+    saveTimer = setTimeout(() => {
+      saveTimer = 0;
+      save();
+    }, 400);
+  }
+
+  function flushSave() {
+    clearTimeout(saveTimer);
+    saveTimer = 0;
+    save();
   }
 
   function load() {
@@ -293,13 +309,16 @@
     const bonus = charmOn && usable ? D.charmBonus(from) : 0;
     const vfx = D.vfxStage(from);
 
-    byId("eqSvg").innerHTML = iconSvg(cur.weapon, false);
+    if (!state.auto || renderStage._id !== cur.id) {
+      byId("eqSvg").innerHTML = iconSvg(cur.weapon, false);
+      renderStage._id = cur.id;
+      byId("ampSub").innerHTML =
+        "次元灵驿（" + (cur.weapon ? "武器" : "非武器") + "）" +
+        (vfx ? " · <em>" + vfx.name + "</em>" : "") +
+        "<br>" + attrText(from, cur.weapon);
+    }
     byId("eqIcon").className = "altar " + (cur.weapon ? "weapon " : "gear ") + vfxClass(from) + " " + successGlowClass(from);
     byId("ampLv").textContent = "+" + from;
-    byId("ampSub").innerHTML =
-      "次元灵驿（" + (cur.weapon ? "武器" : "非武器") + "）" +
-      (vfx ? " · <em>" + vfx.name + "</em>" : "") +
-      "<br>" + attrText(from, cur.weapon);
 
     byId("rateNow").textContent = from >= D.MAX_LEVEL ? "—" : rate + "%";
     byId("rateBase").textContent = from >= D.MAX_LEVEL ? "—" : base + "%" + (bonus ? " +" + bonus + "%" : "");
@@ -315,7 +334,7 @@
         rule.type === "downgrade" ? "失败则掉级" : "本档必成";
     }
 
-    renderCharmButtons(usable);
+    if (!state.auto) renderCharmButtons(usable);
 
     const cost = E.attemptCost(from, cur.weapon, charmOn && usable);
     byId("costRow").innerHTML = from >= D.MAX_LEVEL
@@ -365,14 +384,43 @@
     if (rmbEl) rmbEl.textContent = rmb.toLocaleString("zh-CN", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
   }
 
-  function render() {
+  function patchSelectedBagCard() {
+    const cur = selected();
+    if (!cur) return;
+    const card = document.querySelector('#inventory .embryo[data-id="' + cur.id + '"]');
+    if (!card) {
+      renderBag();
+      return;
+    }
+    const lv = card.querySelector(".embryo-lv");
+    if (lv) lv.textContent = "+" + cur.level;
+    const costs = card.querySelectorAll(".embryo-cost b");
+    if (costs[0]) costs[0].textContent = fmt(cur.crystal || 0);
+    if (costs[1]) costs[1].textContent = fmt(cur.charm || 0);
+    const meta = card.querySelector(".embryo-meta");
+    if (meta && !cur.broken) {
+      const vfx = D.vfxStage(cur.level);
+      meta.textContent = attrText(cur.level, cur.weapon) + (vfx ? " · " + vfx.name : "");
+    }
+  }
+
+  function render(opts) {
+    const light = opts && opts.light;
+    if (light) {
+      renderStage();
+      renderSpent();
+      patchSelectedBagCard();
+      scheduleSave();
+      return;
+    }
     renderBag();
     renderSlots();
     renderStage();
     renderSpent();
     const cur = selected();
     if (cur) renderCharmButtons(D.canUseCharm(cur.level));
-    save();
+    if (opts && opts.deferSave) scheduleSave();
+    else save();
   }
 
   function closeAmpOverlay() {
@@ -591,7 +639,9 @@
     let payload = null;
     if (out.result === "success") {
       cur.level = out.to;
-      log(`<span class="ok">成功</span> ${kindName} +${from} → +${out.to}　矛盾 -${fmt(cost.crystal)}　${charm ? "幸运符 -1　" : ""}成功率 ${out.rate}%`);
+      if (!silent) {
+        log(`<span class="ok">成功</span> ${kindName} +${from} → +${out.to}　矛盾 -${fmt(cost.crystal)}　${charm ? "幸运符 -1　" : ""}成功率 ${out.rate}%`);
+      }
       payload = {
         result: "success",
         title: "成功",
@@ -606,7 +656,9 @@
       };
     } else if (out.result === "downgrade") {
       cur.level = out.to;
-      log(`<span class="down">降级</span> ${kindName} +${from} → +${out.to}（-${out.drop}）　成功率 ${out.rate}%`);
+      if (!silent) {
+        log(`<span class="down">降级</span> ${kindName} +${from} → +${out.to}（-${out.drop}）　成功率 ${out.rate}%`);
+      }
       payload = {
         result: "downgrade",
         title: "失败",
@@ -634,7 +686,8 @@
       retireDestroyed();
     }
     if (!silent && payload) state.fusing = true;
-    render();
+    if (silent) render({ light: out.result !== "destroy" });
+    else render();
     if (!silent && payload) playAmpSequence(payload);
     return out;
   }
@@ -728,6 +781,7 @@
     state.auto = false;
     clearTimeout(autoTimer);
     byId("btnAuto").textContent = "开始自动";
+    flushSave();
     render();
   }
 
@@ -772,7 +826,8 @@
         return;
       }
     }
-    autoTimer = setTimeout(autoTick, clampNum(byId("autoDelay").value, 0, C.auto.maxDelay));
+    const delay = clampNum(byId("autoDelay").value, 0, C.auto.maxDelay);
+    autoTimer = setTimeout(autoTick, delay);
   }
 
   let mcBusy = false;
