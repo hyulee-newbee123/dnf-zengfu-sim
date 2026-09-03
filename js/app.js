@@ -352,8 +352,17 @@
   function renderSpent() {
     const crystal = byId("spentCrystal");
     const charm = byId("spentCharm");
-    if (crystal) crystal.textContent = fmt(state.spent.crystal || 0);
-    if (charm) charm.textContent = fmt(state.spent.charm || 0);
+    const teraEl = byId("spentTera");
+    const rmbEl = byId("spentRmb");
+    const cry = state.spent.crystal || 0;
+    const ch = state.spent.charm || 0;
+    const prices = C.tera || { crystal: 200, charm: 13000, rmbPerTera: 1.8 };
+    const tera = cry * prices.crystal + ch * prices.charm;
+    const rmb = tera / (prices.rmbPerTera || 1.8);
+    if (crystal) crystal.textContent = fmt(cry);
+    if (charm) charm.textContent = fmt(ch);
+    if (teraEl) teraEl.textContent = fmt(tera);
+    if (rmbEl) rmbEl.textContent = rmb.toLocaleString("zh-CN", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
   }
 
   function render() {
