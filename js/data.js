@@ -25,6 +25,13 @@
     return from >= C.charm.minLevel;
   }
 
+  function charmCost(from) {
+    if (from < C.charm.minLevel) return 0;
+    const rows = C.charm.cost;
+    if (!rows || !rows.length) return 1;
+    return pickByFrom(rows, from).count;
+  }
+
   function goldCost(from, isWeapon) {
     const table = isWeapon ? C.crystalWeapon : C.crystalGear;
     return table[from] * C.goldPerCrystal;
@@ -43,12 +50,18 @@
     return Math.round(pack.a * level + pack.b * level * level);
   }
 
+  function attrAt(table, level) {
+    if (level <= 0) return 0;
+    if (Array.isArray(table)) return table[level] || 0;
+    return quad(level, table);
+  }
+
   function weaponDualAtk(level) {
-    return quad(level, C.attr.weaponDualAtk);
+    return attrAt(C.attr.weaponDualAtk, level);
   }
 
   function gearStrInt(level) {
-    return quad(level, C.attr.gearStrInt);
+    return attrAt(C.attr.gearStrInt, level);
   }
 
   function gearMagicResist(level) {
@@ -82,6 +95,7 @@
     BASE_SUCCESS: C.baseSuccess,
     failRule,
     charmBonus,
+    charmCost,
     canUseCharm,
     CRYSTAL_WEAPON: C.crystalWeapon,
     CRYSTAL_GEAR: C.crystalGear,

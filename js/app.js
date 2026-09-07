@@ -348,7 +348,7 @@
   }
 
   function renderTable() {
-    const rows = ["<thead><tr><th>等级</th><th>基础</th><th>幸运符</th><th>带符</th><th>失败结果</th><th>武器矛盾</th><th>非武器矛盾</th><th>武器金币</th><th>技攻</th></tr></thead><tbody>"];
+    const rows = ["<thead><tr><th>等级</th><th>基础</th><th>幸运符</th><th>符耗</th><th>带符</th><th>失败结果</th><th>武器矛盾</th><th>非武器矛盾</th><th>武器金币</th><th>技攻</th></tr></thead><tbody>"];
     for (let i = 0; i < D.MAX_LEVEL; i++) {
       const charm = D.charmBonus(i);
       const src = D.CRYSTAL_SOURCE[i] === "scaled" ? " scaled" : "";
@@ -356,6 +356,7 @@
         <td>+${i} → +${i + 1}</td>
         <td class="num">${D.BASE_SUCCESS[i]}%</td>
         <td>${charm ? "+" + charm + "%" : "不可用"}</td>
+        <td class="num">${D.charmCost(i) || "—"}</td>
         <td class="num">${E.successRate(i, true)}%</td>
         <td>${D.failDetail(i)}</td>
         <td class="num${src}">${D.CRYSTAL_WEAPON[i]}</td>
@@ -375,9 +376,9 @@
     const rmbEl = byId("spentRmb");
     const cry = state.spent.crystal || 0;
     const ch = state.spent.charm || 0;
-    const prices = C.tera || { crystal: 200, charm: 13000, rmbPerTera: 1.8 };
+    const prices = C.tera || { crystal: 200, charm: 11000, rmbPerTera: 1.4 };
     const tera = cry * prices.crystal + ch * prices.charm;
-    const rmb = tera / (prices.rmbPerTera || 1.8);
+    const rmb = tera / (prices.rmbPerTera || 1.4);
     if (crystal) crystal.textContent = fmt(cry);
     if (charm) charm.textContent = fmt(ch);
     if (teraEl) teraEl.textContent = fmt(tera);
@@ -640,7 +641,7 @@
     if (out.result === "success") {
       cur.level = out.to;
       if (!silent) {
-        log(`<span class="ok">成功</span> ${kindName} +${from} → +${out.to}　矛盾 -${fmt(cost.crystal)}　${charm ? "幸运符 -1　" : ""}成功率 ${out.rate}%`);
+        log(`<span class="ok">成功</span> ${kindName} +${from} → +${out.to}　矛盾 -${fmt(cost.crystal)}　${charm ? "幸运符 -" + cost.charm + "　" : ""}成功率 ${out.rate}%`);
       }
       payload = {
         result: "success",
@@ -651,7 +652,7 @@
         fromText: "+" + from,
         toText: "+" + out.to,
         arrow: "→",
-        meta: kindName + "次元灵驿　成功率 " + out.rate + "%<br>矛盾 -" + fmt(cost.crystal) + (charm ? "　幸运符 -1" : ""),
+        meta: kindName + "次元灵驿　成功率 " + out.rate + "%<br>矛盾 -" + fmt(cost.crystal) + (charm ? "　幸运符 -" + cost.charm : ""),
         animMeta: kindName + " +" + from + " → +" + (from + 1),
       };
     } else if (out.result === "downgrade") {
@@ -913,7 +914,7 @@
 
   function renderMcAdvice(start, target, isWeapon, count) {
     const box = byId("mcAdvice");
-    const prices = C.tera || { crystal: 200, charm: 13000 };
+    const prices = C.tera || { crystal: 200, charm: 11000 };
     const advice = E.adviseSet({
       start,
       target,

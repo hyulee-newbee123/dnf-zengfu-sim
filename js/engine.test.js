@@ -25,6 +25,13 @@ assert(D.BASE_SUCCESS[4] === 80 && D.BASE_SUCCESS[10] === 40, "4 and 10 base rat
 assert(D.BASE_SUCCESS[12] === 20 && D.BASE_SUCCESS[19] === 20, "12+ is 20%");
 assert(D.charmBonus(3) === 0 && D.charmBonus(4) === 5 && D.charmBonus(11) === 5, "charm +5% before 12");
 assert(D.charmBonus(12) === 2, "charm +2% from 12");
+assert(D.charmCost(3) === 0 && D.charmCost(4) === 1 && D.charmCost(9) === 1, "charm 1 before 10");
+assert(D.charmCost(10) === 2 && D.charmCost(11) === 2, "charm 2 at 10-11");
+assert(D.charmCost(12) === 4 && D.charmCost(15) === 4, "charm 4 at 12-15");
+assert(D.charmCost(16) === 8 && D.charmCost(19) === 8, "charm 8 at 16-19");
+assert(E.attemptCost(10, true, true).charm === 2, "10→11 costs 2 charms");
+assert(E.attemptCost(16, false, true).charm === 8, "16→17 costs 8 charms");
+assert(E.attemptCost(9, true, false).charm === 0, "no charm when off");
 assert(E.successRate(4, true) === 85, "4→5 with charm 85%");
 assert(E.successRate(12, true) === 22, "12→13 with charm 22%");
 assert(E.successRate(10, false) === 40, "10→11 no charm 40%");
@@ -33,10 +40,11 @@ assert(D.failRule(7).drop === 3 && D.failRule(9).drop === 3, "7-9 fail -3");
 assert(D.failRule(10).type === "destroy", "10+ destroy");
 assert(D.CRYSTAL_WEAPON[0] === 35 && D.CRYSTAL_WEAPON[3] === 97, "weapon 1-4 crystals");
 assert(D.CRYSTAL_GEAR[0] === 26 && D.CRYSTAL_GEAR[3] === 72, "gear 1-4 crystals");
-assert(D.weaponDualAtk(4) === 109, "weapon +4 dual atk 109");
-assert(D.gearStrInt(4) === 48, "gear +4 str/int 48");
+assert(D.weaponDualAtk(4) === 109 && D.weaponDualAtk(12) === 641 && D.weaponDualAtk(20) === 817, "weapon dual atk table");
+assert(D.gearStrInt(4) === 48 && D.gearStrInt(12) === 245 && D.gearStrInt(20) === 325, "gear str/int table");
 assert(D.gearMagicResist(1) === 10 && D.gearMagicResist(4) === 44, "magic resist anchors");
-assert(D.skillAtk(7) === 0 && D.skillAtk(20) === 20, "skill atk unlock / cap");
+assert(D.skillAtk(7) === 0 && D.skillAtk(8) === 0.5 && D.skillAtk(12) === 4, "skill atk 8 / 12");
+assert(D.skillAtk(17) === 14 && D.skillAtk(20) === 20, "skill atk 17 / cap");
 
 const always = E.roll(0, false, () => 0.999);
 assert(always.result === "success" && always.to === 1, "0→1 always success");
@@ -78,18 +86,18 @@ const advice = E.adviseSet({
   isWeapon: false,
   count: 3,
   crystalTera: 200,
-  charmTera: 13000,
+  charmTera: 11000,
 });
 assert(advice.best && Number.isFinite(advice.best.tera), "advice has tera");
 assert(advice.count === 3 && advice.isWeapon === false, "advice uses count and type");
 assert(advice.best.tera <= advice.noCharm.tera, "best is not worse than no charm");
 
 const fromZero = E.adviseSet({
-  start: 0, target: 12, isWeapon: true, count: 1, crystalTera: 200, charmTera: 13000,
+  start: 0, target: 12, isWeapon: true, count: 1, crystalTera: 200, charmTera: 11000,
 });
 const fromGate = E.adviseSet({
   start: fromZero.best.charmFrom, target: 12, isWeapon: true, count: 1,
-  crystalTera: 200, charmTera: 13000,
+  crystalTera: 200, charmTera: 11000,
 });
 if (fromZero.best.kind === "from") {
   assert(fromGate.mustCharm, "start at threshold means must use charm");
@@ -101,7 +109,7 @@ const fromSeven = E.adviseSet({
   isWeapon: false,
   count: 3,
   crystalTera: 200,
-  charmTera: 13000,
+  charmTera: 11000,
 });
 assert(fromSeven.start === 7, "advice uses filled start");
 assert(fromSeven.best.tera < advice.best.tera, "7→10 cheaper than 0→10");

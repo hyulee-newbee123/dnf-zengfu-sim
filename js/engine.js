@@ -33,7 +33,7 @@
     return {
       crystal: D.crystalCost(from, isWeapon),
       gold: D.goldCost(from, isWeapon),
-      charm: useCharm && D.canUseCharm(from) ? 1 : 0,
+      charm: useCharm && D.canUseCharm(from) ? D.charmCost(from) : 0,
     };
   }
 
@@ -60,9 +60,11 @@
     const rateOn = new Float64Array(max);
     const drop = new Int8Array(max);
     const dead = new Uint8Array(max);
+    const charmCost = new Uint8Array(max);
     for (let i = 0; i < max; i++) {
       rateOff[i] = D.BASE_SUCCESS[i];
       rateOn[i] = clamp(D.BASE_SUCCESS[i] + D.charmBonus(i), 0, 100);
+      charmCost[i] = D.charmCost(i);
       const rule = D.failRule(i);
       if (rule.type === "destroy") dead[i] = 1;
       else if (rule.type === "downgrade") drop[i] = rule.drop || 0;
@@ -73,6 +75,7 @@
       rateOn,
       drop,
       dead,
+      charmCost,
       cryW: D.CRYSTAL_WEAPON,
       cryG: D.CRYSTAL_GEAR,
       goldPer: (cfg && cfg.goldPerCrystal) || 2000,
@@ -116,7 +119,7 @@
     while (level < target) {
       const charmOn = level >= charmFloor;
       crystal += cry[level] || 0;
-      if (charmOn) charm += 1;
+      if (charmOn) charm += T.charmCost[level] || 1;
       attempts += 1;
       if (rng() * 100 < (charmOn ? T.rateOn[level] : T.rateOff[level])) {
         success += 1;
