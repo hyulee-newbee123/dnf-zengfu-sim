@@ -376,9 +376,9 @@
     const rmbEl = byId("spentRmb");
     const cry = state.spent.crystal || 0;
     const ch = state.spent.charm || 0;
-    const prices = C.tera || { crystal: 200, charm: 11000, rmbPerTera: 1.4 };
+    const prices = C.tera || { crystal: 200, charm: 11000, rmbPerTera: 1400 };
     const tera = cry * prices.crystal + ch * prices.charm;
-    const rmb = tera / (prices.rmbPerTera || 1.4);
+    const rmb = tera / (prices.rmbPerTera || 1400);
     if (crystal) crystal.textContent = fmt(cry);
     if (charm) charm.textContent = fmt(ch);
     if (teraEl) teraEl.textContent = fmt(tera);

@@ -127,7 +127,7 @@ window.DNFConfig = {
   tera: {
     crystal: 200,
     charm: 11000,
-    rmbPerTera: 1.4, /* 泰拉 ÷ 此值 = 预估人民币 */
+    rmbPerTera: 1400, /* 泰拉 ÷ 此值 = 预估人民币 */
   },
 
   /* ---------- 演算 ---------- */
