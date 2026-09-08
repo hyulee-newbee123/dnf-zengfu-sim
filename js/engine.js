@@ -355,11 +355,13 @@
       runs: n,
       reachRate: n ? reach / n : 0,
       crystal: {
+        min: crystals[0] || 0,
         mean: mean(crystals),
         p25: percentile(crystals, 0.25),
         p50: percentile(crystals, 0.5),
         p75: percentile(crystals, 0.75),
         p90: percentile(crystals, 0.9),
+        max: crystals[n - 1] || 0,
       },
       embryo: {
         mean: mean(embryos),
@@ -375,9 +377,11 @@
         p50: percentile(destroys, 0.5),
       },
       charm: {
+        min: charms[0] || 0,
         mean: mean(charms),
         p50: percentile(charms, 0.5),
         p90: percentile(charms, 0.9),
+        max: charms[n - 1] || 0,
       },
     };
   }

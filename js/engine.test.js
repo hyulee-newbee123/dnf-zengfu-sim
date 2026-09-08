@@ -72,6 +72,8 @@ const mc = E.monteCarlo({ start: 0, target: 4, useCharm: false, runs: 200 });
 assert(mc.reachRate === 1, "0→4 always reaches");
 assert(Math.round(mc.crystal.mean) === 258, "0→4 mean crystals 258");
 assert(mc.charm.mean === 0, "0→4 no charm");
+assert(mc.crystal.min === 258 && mc.crystal.max === 258, "0→4 crystal min/max 258");
+assert(mc.charm.min === 0 && mc.charm.max === 0, "0→4 charm min/max 0");
 
 const alwaysOk = () => 0.001;
 const evSafe = E.expectedToTarget({ start: 0, target: 4, isWeapon: true, useCharm: false });
