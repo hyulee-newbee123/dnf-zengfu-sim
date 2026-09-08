@@ -178,11 +178,40 @@
     return Math.round((Number(tera) || 0) / income);
   }
 
+  function synthCouponPrice() {
+    const g = findGoods("synth");
+    const n = g && Number(g.price);
+    return Number.isFinite(n) && n > 0 ? n : 50;
+  }
+
+  function bestRechargePack() {
+    const packs = (shopCfg().recharge || []).filter((p) => {
+      const coupon = Number(p.coupon);
+      const rmb = Number(p.rmb);
+      return Number.isFinite(coupon) && coupon > 0 && Number.isFinite(rmb) && rmb > 0;
+    });
+    if (!packs.length) return null;
+    return packs.reduce((best, p) => {
+      const rate = p.coupon / p.rmb;
+      const bestRate = best.coupon / best.rmb;
+      if (rate > bestRate + 1e-12) return p;
+      if (Math.abs(rate - bestRate) <= 1e-12 && p.coupon > best.coupon) return p;
+      return best;
+    });
+  }
+
+  function rmbPerSynthUnit() {
+    const pack = bestRechargePack();
+    const coupon = synthCouponPrice();
+    if (!pack || !(coupon > 0)) return null;
+    return coupon * (pack.rmb / pack.coupon);
+  }
+
   function rmbOfSynth(synthCount) {
     if (synthCount == null || !Number.isFinite(synthCount)) return null;
-    const unit = Number(C.tera && C.tera.rmbPerSynth);
-    const price = Number.isFinite(unit) && unit > 0 ? unit : 5;
-    return synthCount * price;
+    const unit = rmbPerSynthUnit();
+    if (unit == null) return null;
+    return synthCount * unit;
   }
 
   function syncMarketInputs() {
@@ -214,7 +243,12 @@
     const el = byId("marketSummary");
     if (!el) return;
     const m = getMarket();
-    el.textContent = "矛盾 " + fmt(m.crystal) + " · 幸运符 " + fmt(m.charm) + " · 合成器 " + fmt(m.synth);
+    const unit = rmbPerSynthUnit();
+    const pack = bestRechargePack();
+    const rmbTxt = unit == null || !pack
+      ? "合成器人民币未折算"
+      : ("合成器约 " + fmtHold(unit) + " 元（50 点券 · " + pack.rmb + " 元档）");
+    el.textContent = "矛盾 " + fmt(m.crystal) + " · 幸运符 " + fmt(m.charm) + " · 合成器 " + fmt(m.synth) + " · " + rmbTxt;
   }
 
   function defaultHud() {
@@ -269,12 +303,20 @@
   }
 
   function clearWallet() {
-    if (!confirm("清空点券、装扮合成器、持有泰拉、矛盾、幸运符和已充值？背包和消耗统计不动。")) return;
+    if (!confirm("清空点券、装扮合成器、持有泰拉、矛盾、幸运符和已充值？消耗统计不动。")) return;
     state.wallet = defaultWallet();
     save();
     renderWallet();
     renderStage();
     toast("资产已清空");
+  }
+
+  function clearSpent() {
+    if (!confirm("清空已消耗矛盾、幸运符和预估？资产不动。")) return;
+    state.spent = { crystal: 0, charm: 0 };
+    save();
+    renderSpent();
+    toast("消耗统计已清空");
   }
 
   function sanitizeWallet(raw) {
@@ -360,7 +402,8 @@
     const box = byId("rechargeBox");
     if (box) {
       box.innerHTML = (shopCfg().recharge || []).map((t, i) =>
-        '<button type="button" class="recharge-card" data-recharge="' + i + '">' +
+        '<button type="button" class="recharge-card' + (t.hot ? " hot" : "") + '" data-recharge="' + i + '">' +
+        (t.hot ? '<span class="hot-tag">推荐</span>' : "") +
         '<span class="rmb">' + t.rmb + " 元</span>" +
         '<span class="coupon">' + fmt(t.coupon) + " 点券</span>" +
         "</button>"
@@ -778,7 +821,7 @@
 
   function fmtRmb(n) {
     if (n == null || !Number.isFinite(n)) return "—";
-    return fmt(n);
+    return fmtHold(n);
   }
 
   function renderSpent() {
@@ -1345,7 +1388,7 @@
       [piece + "期望泰拉", fmtTera(teraMean), "按你填的矛盾、幸运符单价，把期望消耗折成泰拉。" + many],
       [piece + "中位数泰拉", fmtTera(teraP50), "按中位数矛盾和幸运符折成泰拉，更接近普通人的花费。" + many],
       [piece + "约等于装扮合成器", fmtSynth(synthMean), "期望泰拉 ÷ 到手泰拉（标价打 9 折），四舍五入取整。单价填 0 时不折算。" + many],
-      [piece + "期望 RMB", fmtRmb(rmbMean), "合成器个数 × 5 元。单价填 0 时不折算。" + many],
+      [piece + "期望 RMB", fmtRmb(rmbMean), "合成器个数 ×（50 点券按充值档折成的人民币）。合成器泰拉填 0 时不折算。" + many],
       [piece + "最少矛盾", fmt(r.crystal.min * n), "这些次模拟里，消耗矛盾最少的那一次。" + many],
       [piece + "最多矛盾", fmt(r.crystal.max * n), "这些次模拟里，消耗矛盾最多的那一次。" + many],
       [piece + "最少幸运符", fmt(r.charm.min * n), "这些次模拟里，消耗幸运符最少的那一次。" + many],
@@ -1610,16 +1653,7 @@
     };
     byId("btnDropBroken").onclick = dropBroken;
     byId("btnClearWallet").onclick = clearWallet;
-    byId("btnClear").onclick = () => {
-      if (!confirm("清空背包、身上增幅和消耗统计？点券、泰拉、矛盾、幸运符和合成器不会清。")) return;
-      state.bag = [];
-      state.selectedId = null;
-      state.spent = { crystal: 0, charm: 0 };
-      state.gear = Object.fromEntries(D.SLOTS.map((s) => [s.id, 0]));
-      byId("log").innerHTML = "";
-      render();
-      toast("已清空");
-    };
+    byId("btnClearSpent").onclick = clearSpent;
 
     byId("inventory").addEventListener("click", (ev) => {
       const act = ev.target.closest("[data-act]");

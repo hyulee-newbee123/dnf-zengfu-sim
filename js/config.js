@@ -129,10 +129,9 @@ window.DNFConfig = {
     charm: 11000,        /* 幸运符价值泰拉 */
     synth: 0,            /* 装扮合成器价值泰拉（拍卖标价） */
     synthIncomeRate: 0.9, /* 标价 × 此值 = 到手泰拉 */
-    rmbPerSynth: 5,      /* 一个装扮合成器 = 5 元 */
   },
 
-  /* ---------- 假充值 / 商城（只改这里就能加档位和商品） ---------- */
+  /* ---------- 充值 / 商城（只改这里就能加档位和商品） ---------- */
   shop: {
     recharge: [
       { rmb: 1, coupon: 10 },
@@ -142,7 +141,7 @@ window.DNFConfig = {
       { rmb: 128, coupon: 1340 },
       { rmb: 198, coupon: 2100 },
       { rmb: 328, coupon: 3520 },
-      { rmb: 648, coupon: 6980 },
+      { rmb: 648, coupon: 6980, hot: true },
     ],
     goods: [
       {

@@ -256,12 +256,33 @@ header.hero p {
   min-height: 84px;
   cursor: pointer;
   transition: 0.15s ease;
+  position: relative;
 }
 .recharge-card:hover,
 .recharge-card:focus-visible {
   border-color: var(--gold);
   box-shadow: inset 0 0 16px rgba(214, 177, 90, 0.12);
   transform: translateY(-1px);
+}
+.recharge-card.hot {
+  border-color: var(--gold);
+  background: linear-gradient(180deg, rgba(228, 196, 106, 0.22), #1a2e1c 70%);
+  box-shadow: inset 0 0 20px rgba(214, 177, 90, 0.18), 0 0 16px rgba(228, 196, 106, 0.16);
+}
+.recharge-card.hot:hover,
+.recharge-card.hot:focus-visible {
+  border-color: var(--gold-bright);
+  box-shadow: inset 0 0 22px rgba(214, 177, 90, 0.24), 0 0 20px rgba(228, 196, 106, 0.22);
+}
+.recharge-card .hot-tag {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  color: #1a1408;
+  background: var(--gold);
+  padding: 1px 6px;
 }
 .recharge-card .rmb {
   display: block;

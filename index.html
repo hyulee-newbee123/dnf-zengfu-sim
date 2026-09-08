@@ -42,6 +42,7 @@
           <div class="pill">预估消耗泰拉 <span class="num" id="spentTera">0</span></div>
           <div class="pill">约等于装扮合成器 <span class="num" id="spentSynth">—</span></div>
           <div class="pill">预估消耗 RMB <span class="num" id="spentRmb">—</span></div>
+          <button type="button" class="btn danger hud-clear" id="btnClearSpent">清空消耗统计</button>
         </div>
       </section>
     </div>
@@ -52,7 +53,7 @@
       <div class="eyebrow">地下城与勇士手游 · 模拟器</div>
       <div class="hero-title">
         <h1>增幅机</h1>
-        <span class="ver">v2.0</span>
+        <span class="ver">v2.1</span>
       </div>
       <p>成功 / 降级 / 破坏 · 纯属娱乐</p>
     </header>
@@ -72,7 +73,6 @@
           <div class="bag-head">
             <h2>背包</h2>
             <span class="bag-summary" id="bagSummary"></span>
-            <button type="button" class="btn danger" id="btnClear">清空</button>
           </div>
           <p class="hint">点一件放进增幅机再打。破坏后这件留下，但不能再放入增幅器。</p>
           <div class="bag-filters">
@@ -161,8 +161,13 @@
 
     <section id="panel-shop" class="panel">
       <div class="block">
+        <h2>充值</h2>
+        <p class="hint">点一下立刻到账，不走真实支付。</p>
+        <div class="recharge-grid" id="rechargeBox"></div>
+      </div>
+      <div class="block">
         <h2>行情</h2>
-        <p class="hint">自己填单价，保存后全局生效。合成器标价打 9 折是到手泰拉；矛盾和幸运符按这里的单价用泰拉买。</p>
+        <p class="hint">自己填单价，保存后全局生效。合成器标价打 9 折是到手泰拉；矛盾和幸运符按这里的单价用泰拉买。人民币按固定 50 点券和充值档折算，不用填。</p>
         <p class="market-summary" id="marketSummary"></p>
         <div class="market-grid">
           <label>矛盾价值泰拉
@@ -178,11 +183,6 @@
         <div class="btn-row tight-row">
           <button type="button" class="btn gold" id="btnMarketOk">保存行情</button>
         </div>
-      </div>
-      <div class="block">
-        <h2>假充值</h2>
-        <p class="hint">点一下立刻到账，不走真实支付。</p>
-        <div class="recharge-grid" id="rechargeBox"></div>
       </div>
       <div class="block" id="shopBuyArea">
         <h2>点券商城</h2>
@@ -219,7 +219,7 @@
 
     <section id="panel-calc" class="panel">
       <h2>期望消耗演算</h2>
-      <p class="hint">按你填的类型、件数、起始和目标来算。破坏后新胚子从 0 重来；置换后胚子回到起始等级，下一件接着打。开了幸运符时，低于设定等级不会消耗。中位数比平均数更接近普通人的花费。泰拉、合成器和人民币按行情里填的单价折算。</p>
+      <p class="hint">按你填的类型、件数、起始和目标来算。破坏后新胚子从 0 重来；置换后胚子回到起始等级，下一件接着打。开了幸运符时，低于设定等级不会消耗。中位数比平均数更接近普通人的花费。泰拉和合成器按行情折算；人民币按 50 点券和充值档估算。</p>
       <div class="preset-grid" id="mcPresets"></div>
       <div class="form-grid">
         <label>胚子类型
@@ -261,7 +261,7 @@
         <p><b>置换</b>：部位对应（武器胚子只能换武器），且胚子等级必须更高。互换后对调，胚子留下。</p>
         <p><b>矛盾消耗</b>：按规则表逐档扣除。灰色行为估算值。金币按矛盾×2000 计算。</p>
         <p><b>随机</b>：每次独立抽样，无垫刀、无补偿池。</p>
-        <p><b>充值 / 商城</b>：假充值点一下到账点券。点券商城买装扮合成器，合成器打 9 折兑泰拉；泰拉商城按行情买矛盾和幸运符。增幅要先有对应材料，不够不能打。清空背包不会清资产。</p>
+        <p><b>充值 / 商城</b>：假充值点一下到账点券。点券商城买装扮合成器，合成器打 9 折兑泰拉；泰拉商城按行情买矛盾和幸运符。增幅要先有对应材料，不够不能打。侧栏可以分别清空资产和消耗统计。</p>
       </div>
       <div class="value-table-wrap">
         <table class="value-table" id="offTable"></table>
