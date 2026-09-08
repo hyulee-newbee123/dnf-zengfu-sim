@@ -15,6 +15,9 @@
     useCharm: false,
     mcCharm: false,
     spent: { crystal: 0, charm: 0 },
+    market: null,
+    wallet: { coupon: 0, synth: 0, tera: 0, crystal: 0, charm: 0, rmb: 0 },
+    hud: { open: false },
   };
 
   function uid() {
@@ -130,6 +133,394 @@
     while (box.childNodes.length > 80) box.removeChild(box.lastChild);
   }
 
+  function defaultMarket() {
+    const t = C.tera || {};
+    return {
+      crystal: Number(t.crystal) || 0,
+      charm: Number(t.charm) || 0,
+      synth: Number(t.synth) || 0,
+    };
+  }
+
+  function sanitizeMarket(raw) {
+    const fallback = defaultMarket();
+    const src = raw && typeof raw === "object" ? raw : {};
+    const num = (v, fb) => {
+      const n = Number(v);
+      return Number.isFinite(n) && n >= 0 ? n : fb;
+    };
+    return {
+      crystal: num(src.crystal, fallback.crystal),
+      charm: num(src.charm, fallback.charm),
+      synth: num(src.synth, fallback.synth),
+    };
+  }
+
+  function getMarket() {
+    return sanitizeMarket(state.market);
+  }
+
+  function teraOf(crystal, charm, market) {
+    const m = market || getMarket();
+    return (Number(crystal) || 0) * m.crystal + (Number(charm) || 0) * m.charm;
+  }
+
+  function synthIncome(market) {
+    const m = market || getMarket();
+    const rate = Number(C.tera && C.tera.synthIncomeRate);
+    const take = Number.isFinite(rate) && rate > 0 ? rate : 0.9;
+    return m.synth > 0 ? m.synth * take : 0;
+  }
+
+  function synthOf(tera, market) {
+    const income = synthIncome(market);
+    if (!(income > 0)) return null;
+    return Math.round((Number(tera) || 0) / income);
+  }
+
+  function rmbOfSynth(synthCount) {
+    if (synthCount == null || !Number.isFinite(synthCount)) return null;
+    const unit = Number(C.tera && C.tera.rmbPerSynth);
+    const price = Number.isFinite(unit) && unit > 0 ? unit : 5;
+    return synthCount * price;
+  }
+
+  function syncMarketInputs() {
+    const m = getMarket();
+    const set = (id, v) => {
+      const el = byId(id);
+      if (el) el.value = v;
+    };
+    set("mktCrystal", m.crystal);
+    set("mktCharm", m.charm);
+    set("mktSynth", m.synth);
+  }
+
+  function readMarketFromUI() {
+    const read = (id) => {
+      const el = byId(id);
+      if (!el || el.value === "" || el.value === "-") return 0;
+      const n = Number(el.value);
+      return Number.isFinite(n) && n >= 0 ? n : 0;
+    };
+    state.market = {
+      crystal: read("mktCrystal"),
+      charm: read("mktCharm"),
+      synth: read("mktSynth"),
+    };
+  }
+
+  function renderMarketSummary() {
+    const el = byId("marketSummary");
+    if (!el) return;
+    const m = getMarket();
+    el.textContent = "矛盾 " + fmt(m.crystal) + " · 幸运符 " + fmt(m.charm) + " · 合成器 " + fmt(m.synth);
+  }
+
+  function defaultHud() {
+    return { open: false };
+  }
+
+  function sanitizeHud(raw) {
+    const src = raw && typeof raw === "object" ? raw : {};
+    return { open: src.open === true };
+  }
+
+  function applyHud() {
+    state.hud = sanitizeHud(state.hud);
+    const bar = byId("hudSidebar");
+    const rail = byId("btnHudRail");
+    const bg = byId("hudBackdrop");
+    if (bar) bar.classList.toggle("is-min", !state.hud.open);
+    if (bg) bg.hidden = !state.hud.open;
+    if (rail) {
+      rail.setAttribute("aria-expanded", state.hud.open ? "true" : "false");
+      rail.title = state.hud.open ? "收起数据信息" : "展开数据信息";
+    }
+  }
+
+  function toggleHud() {
+    state.hud = sanitizeHud(state.hud);
+    state.hud.open = !state.hud.open;
+    applyHud();
+    save();
+    sfx("tab");
+  }
+
+  function applyMarket() {
+    ["mktCrystal", "mktCharm", "mktSynth"].forEach((id) => {
+      const el = byId(id);
+      if (!el) return;
+      if (el.value === "" || el.value === "-") el.value = 0;
+      const n = Number(el.value);
+      if (!Number.isFinite(n) || n < 0) el.value = 0;
+    });
+    readMarketFromUI();
+    save();
+    refreshCostViews();
+    renderShopCatalog();
+    renderWallet();
+    renderStage();
+    toast("行情已更新");
+  }
+
+  function defaultWallet() {
+    return { coupon: 0, synth: 0, tera: 0, crystal: 0, charm: 0, rmb: 0 };
+  }
+
+  function clearWallet() {
+    if (!confirm("清空点券、装扮合成器、持有泰拉、矛盾、幸运符和已充值？背包和消耗统计不动。")) return;
+    state.wallet = defaultWallet();
+    save();
+    renderWallet();
+    renderStage();
+    toast("资产已清空");
+  }
+
+  function sanitizeWallet(raw) {
+    const src = raw && typeof raw === "object" ? raw : {};
+    const num = (v) => {
+      const n = Number(v);
+      return Number.isFinite(n) && n >= 0 ? n : 0;
+    };
+    return {
+      coupon: Math.floor(num(src.coupon)),
+      synth: Math.floor(num(src.synth)),
+      tera: num(src.tera),
+      crystal: Math.floor(num(src.crystal)),
+      charm: Math.floor(num(src.charm)),
+      rmb: num(src.rmb),
+    };
+  }
+
+  function getWallet() {
+    state.wallet = sanitizeWallet(state.wallet);
+    return state.wallet;
+  }
+
+  function shopCfg() {
+    return C.shop || { recharge: [], goods: [], maxBuy: 99, maxExchange: 999 };
+  }
+
+  function shopGoods() {
+    return (shopCfg().goods || []).filter((g) => g && g.id);
+  }
+
+  function findGoods(id) {
+    return shopGoods().find((g) => g.id === id) || null;
+  }
+
+  function currencyName(key) {
+    if (key === "coupon") return "点券";
+    if (key === "synth") return "装扮合成器";
+    if (key === "tera") return "泰拉";
+    if (key === "crystal") return "矛盾";
+    if (key === "charm") return "幸运符";
+    return key;
+  }
+
+  function goodsPrice(item) {
+    if (!item) return 0;
+    if (item.priceFrom) {
+      const m = getMarket();
+      return Number(m[item.priceFrom]) || 0;
+    }
+    return Number(item.price) || 0;
+  }
+
+  function ampBlockReason(cost) {
+    const w = getWallet();
+    if (w.crystal < cost.crystal) return "矛盾不足，先去商城用泰拉买";
+    if ((cost.charm || 0) > 0 && w.charm < cost.charm) return "幸运符不足，先去商城用泰拉买";
+    return null;
+  }
+
+  function fmtHold(n) {
+    if (!Number.isFinite(n)) return "0";
+    if (Math.abs(n - Math.round(n)) < 1e-6) return fmt(n);
+    return n.toLocaleString("zh-CN", { maximumFractionDigits: 1 });
+  }
+
+  function renderWallet() {
+    const w = getWallet();
+    const set = (id, v) => {
+      const el = byId(id);
+      if (el) el.textContent = v;
+    };
+    set("walCoupon", fmt(w.coupon));
+    set("walSynth", fmt(w.synth));
+    set("walTera", fmtHold(w.tera));
+    set("walCrystal", fmt(w.crystal));
+    set("walCharm", fmt(w.charm));
+    set("walRmb", fmt(w.rmb));
+    renderExchangePreview();
+  }
+
+  function renderShopCatalog() {
+    const box = byId("rechargeBox");
+    if (box) {
+      box.innerHTML = (shopCfg().recharge || []).map((t, i) =>
+        '<button type="button" class="recharge-card" data-recharge="' + i + '">' +
+        '<span class="rmb">' + t.rmb + " 元</span>" +
+        '<span class="coupon">' + fmt(t.coupon) + " 点券</span>" +
+        "</button>"
+      ).join("");
+    }
+    const maxBuy = shopCfg().maxBuy || 9999;
+    const cardHtml = (g) => {
+      const unit = goodsPrice(g);
+      const pay = currencyName(g.currency || "coupon");
+      const priceTxt = unit > 0 ? fmtHold(unit) + " " + pay + " / 个" : "先在行情里填单价";
+      return '<article class="goods-card" data-goods="' + g.id + '">' +
+        "<h3>" + g.name + "</h3>" +
+        (g.desc ? '<p class="goods-desc">' + g.desc + "</p>" : "") +
+        '<div class="goods-price">' + priceTxt + "</div>" +
+        '<div class="goods-buy">' +
+        '<input type="number" min="1" max="' + maxBuy + '" value="1" data-buy-qty="' + g.id + '" inputmode="numeric" aria-label="购买数量" />' +
+        '<button type="button" class="btn gold" data-buy="' + g.id + '">购买</button>' +
+        "</div></article>";
+    };
+    const fill = (id, list, empty) => {
+      const box = byId(id);
+      if (!box) return;
+      box.innerHTML = list.length ? list.map(cardHtml).join("") : '<p class="hint">' + empty + "</p>";
+    };
+    const all = shopGoods();
+    fill("shopGoodsCoupon", all.filter((g) => (g.currency || "coupon") === "coupon"), "点券商城暂无商品。");
+    fill("shopGoodsTera", all.filter((g) => g.currency === "tera"), "泰拉商城暂无商品。");
+  }
+
+  function maxExQty() {
+    return Math.max(0, Math.min(shopCfg().maxExchange || 999, getWallet().synth || 0));
+  }
+
+  function clampExQty() {
+    const el = byId("exQty");
+    if (!el || el.value === "" || el.value === "-") return;
+    const n = Number(el.value);
+    if (!Number.isFinite(n)) return;
+    const cap = maxExQty();
+    if (n > cap) el.value = cap;
+    else if (n < 0) el.value = 0;
+  }
+
+  function renderExchangePreview() {
+    const el = byId("exPreview");
+    if (!el) return;
+    const w = getWallet();
+    const income = synthIncome();
+    const qtyEl = byId("exQty");
+    const cap = Math.max(1, maxExQty());
+    const qty = qtyEl ? clampNum(qtyEl.value, 1, cap) : 1;
+    if (!(income > 0)) {
+      el.textContent = "还没填装扮合成器价值泰拉。到商城上方保存行情后才能兑换。当前持有合成器 " +
+        fmt(w.synth) + " 个。";
+      return;
+    }
+    el.textContent = "持有合成器 " + fmt(w.synth) + " 个。标价 " + fmt(getMarket().synth) +
+      " 泰拉，到手 " + fmtHold(income) + " 泰拉 / 个。兑 " + qty + " 个可得 " +
+      fmtHold(income * qty) + " 泰拉。";
+  }
+
+  function doRecharge(index) {
+    const tier = (shopCfg().recharge || [])[index];
+    if (!tier) return;
+    const w = getWallet();
+    w.coupon += Math.max(0, Number(tier.coupon) || 0);
+    w.rmb += Math.max(0, Number(tier.rmb) || 0);
+    state.wallet = sanitizeWallet(w);
+    save();
+    renderWallet();
+    sfx("tab");
+    toast("充值 " + tier.rmb + " 元，到账 " + fmt(tier.coupon) + " 点券");
+  }
+
+  function maxBuyQty(item) {
+    const cap = shopCfg().maxBuy || 9999;
+    const unit = goodsPrice(item);
+    if (!(unit > 0)) return 0;
+    const have = Number(getWallet()[item.currency || "coupon"]) || 0;
+    return Math.max(0, Math.min(cap, Math.floor(have / unit)));
+  }
+
+  function clampBuyQty(el) {
+    if (!el || el.value === "" || el.value === "-") return;
+    const item = findGoods(el.dataset.buyQty);
+    if (!item) return;
+    const n = Number(el.value);
+    if (!Number.isFinite(n)) return;
+    const cap = maxBuyQty(item);
+    if (n > cap) el.value = cap;
+    else if (n < 0) el.value = 0;
+  }
+
+  function clampAllBuyQty() {
+    $$("[data-buy-qty]").forEach(clampBuyQty);
+  }
+
+  function doBuy(id) {
+    const item = findGoods(id);
+    if (!item) return;
+    const qtyEl = document.querySelector('[data-buy-qty="' + id + '"]');
+    const unit = goodsPrice(item);
+    if (!(unit > 0)) {
+      toast("先在行情里填" + item.name + "单价", "deny");
+      return;
+    }
+    const cap = maxBuyQty(item);
+    if (cap < 1) {
+      toast(currencyName(item.currency || "coupon") + "不足", "deny");
+      if (qtyEl) qtyEl.value = 0;
+      return;
+    }
+    clampBuyQty(qtyEl);
+    const qty = clampNum(qtyEl && qtyEl.value, 1, cap);
+    if (qtyEl) qtyEl.value = qty;
+    const curKey = item.currency || "coupon";
+    const w = getWallet();
+    const cost = unit * qty;
+    w[curKey] = (w[curKey] || 0) - cost;
+    const give = item.give || {};
+    Object.keys(give).forEach((k) => {
+      w[k] = (w[k] || 0) + (Number(give[k]) || 0) * qty;
+    });
+    state.wallet = sanitizeWallet(w);
+    save();
+    renderWallet();
+    renderStage();
+    clampAllBuyQty();
+    sfx("tab");
+    toast("购入 " + item.name + " ×" + qty);
+  }
+
+  function doExchange() {
+    const w = getWallet();
+    const income = synthIncome();
+    if (!(income > 0)) {
+      toast("先在行情里填合成器价值泰拉", "deny");
+      return;
+    }
+    clampExQty();
+    const maxEx = maxExQty();
+    if (maxEx < 1) {
+      toast("没有可兑换的装扮合成器", "deny");
+      const empty = byId("exQty");
+      if (empty) empty.value = 0;
+      return;
+    }
+    const qtyEl = byId("exQty");
+    const qty = clampNum(qtyEl && qtyEl.value, 1, maxEx);
+    if (qtyEl) qtyEl.value = qty;
+    w.synth -= qty;
+    w.tera += income * qty;
+    state.wallet = sanitizeWallet(w);
+    save();
+    renderWallet();
+    clampExQty();
+    sfx("tab");
+    toast("兑得 " + fmtHold(income * qty) + " 泰拉");
+  }
+
   function save() {
     localStorage.setItem(STORAGE_KEY, JSON.stringify({
       bag: state.bag,
@@ -139,6 +530,9 @@
       useCharm: state.useCharm,
       mcCharm: state.mcCharm,
       spent: state.spent,
+      market: getMarket(),
+      wallet: getWallet(),
+      hud: sanitizeHud(state.hud),
     }));
   }
 
@@ -185,6 +579,9 @@
           charm: state.bag.reduce((n, e) => n + (e.charm || 0), 0),
         };
       }
+      state.market = sanitizeMarket(raw.market);
+      state.wallet = sanitizeWallet(raw.wallet);
+      state.hud = sanitizeHud(raw.hud);
       return true;
     } catch {
       return false;
@@ -337,14 +734,19 @@
     if (!state.auto) renderCharmButtons(usable);
 
     const cost = E.attemptCost(from, cur.weapon, charmOn && usable);
+    const w = getWallet();
+    const lack = from >= D.MAX_LEVEL ? null : ampBlockReason(cost);
+    const shortCry = w.crystal < cost.crystal;
+    const shortCharm = (cost.charm || 0) > 0 && w.charm < cost.charm;
     byId("costRow").innerHTML = from >= D.MAX_LEVEL
       ? '<div class="cost">已达增幅上限 ' + D.MAX_LEVEL + "</div>"
-      : `<div class="cost">矛盾 <strong class="num">${fmt(cost.crystal)}</strong></div>
+      : `<div class="cost${shortCry ? " is-short" : ""}">矛盾 <strong class="num">${fmt(cost.crystal)}</strong> / 持有 ${fmt(w.crystal)}</div>
          <div class="cost">金币 <strong class="num">${fmt(cost.gold)}</strong></div>
-         <div class="cost">幸运符 <strong class="num">${cost.charm}</strong></div>`;
+         <div class="cost${shortCharm ? " is-short" : ""}">幸运符 <strong class="num">${cost.charm}</strong> / 持有 ${fmt(w.charm)}</div>` +
+        (lack ? '<div class="cost is-short">' + lack + "</div>" : "");
 
     if (state.fusing && byId("ampOverlay") && byId("ampOverlay").hidden) state.fusing = false;
-    byId("btnAmp").disabled = from >= D.MAX_LEVEL || state.fusing || state.auto;
+    byId("btnAmp").disabled = from >= D.MAX_LEVEL || state.fusing || state.auto || !!lack;
   }
 
   function renderTable() {
@@ -369,20 +771,33 @@
     byId("offTable").innerHTML = rows.join("");
   }
 
+  function fmtSynth(n) {
+    if (n == null || !Number.isFinite(n)) return "—";
+    return fmt(n);
+  }
+
+  function fmtRmb(n) {
+    if (n == null || !Number.isFinite(n)) return "—";
+    return fmt(n);
+  }
+
   function renderSpent() {
     const crystal = byId("spentCrystal");
     const charm = byId("spentCharm");
     const teraEl = byId("spentTera");
+    const synthEl = byId("spentSynth");
     const rmbEl = byId("spentRmb");
     const cry = state.spent.crystal || 0;
     const ch = state.spent.charm || 0;
-    const prices = C.tera || { crystal: 200, charm: 11000, rmbPerTera: 1400 };
-    const tera = cry * prices.crystal + ch * prices.charm;
-    const rmb = tera / (prices.rmbPerTera || 1400);
+    const tera = teraOf(cry, ch);
+    const synth = synthOf(tera);
+    const rmb = rmbOfSynth(synth);
     if (crystal) crystal.textContent = fmt(cry);
     if (charm) charm.textContent = fmt(ch);
     if (teraEl) teraEl.textContent = fmt(tera);
-    if (rmbEl) rmbEl.textContent = rmb.toLocaleString("zh-CN", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+    if (synthEl) synthEl.textContent = fmtSynth(synth);
+    if (rmbEl) rmbEl.textContent = fmtRmb(rmb);
+    renderMarketSummary();
   }
 
   function patchSelectedBagCard() {
@@ -410,6 +825,7 @@
     if (light) {
       renderStage();
       renderSpent();
+      renderWallet();
       patchSelectedBagCard();
       scheduleSave();
       return;
@@ -418,6 +834,7 @@
     renderSlots();
     renderStage();
     renderSpent();
+    renderWallet();
     const cur = selected();
     if (cur) renderCharmButtons(D.canUseCharm(cur.level));
     if (opts && opts.deferSave) scheduleSave();
@@ -631,6 +1048,15 @@
       : state.useCharm;
     const charm = wantCharm && D.canUseCharm(from);
     const cost = E.attemptCost(from, cur.weapon, charm);
+    const lack = ampBlockReason(cost);
+    if (lack) {
+      toast(lack, "deny");
+      return { result: "poor" };
+    }
+    const wal = getWallet();
+    wal.crystal -= cost.crystal;
+    wal.charm -= cost.charm || 0;
+    state.wallet = sanitizeWallet(wal);
     cur.crystal = (cur.crystal || 0) + cost.crystal;
     cur.charm = (cur.charm || 0) + (cost.charm || 0);
     state.spent.crystal = (state.spent.crystal || 0) + cost.crystal;
@@ -865,27 +1291,8 @@
     setMcBusy(true);
 
     const paint = (r) => {
-      const n = count;
-      const piece = n > 1 ? n + "件" : "";
-      const many = n > 1 ? "按 " + n + " 件合计。" : "";
-      byId("mcOut").innerHTML = [
-        ["达成率", (r.reachRate * 100).toFixed(1) + "%", "这么多次独立模拟里，最终打到目标等级的比例。会一直打到目标，所以一般是 100%。"],
-        [piece + "矛盾中位数", fmt(r.crystal.p50 * n), "一半的模拟消耗的矛盾不超过这个数，比平均数更接近普通人的花费。" + many],
-        [piece + "矛盾期望", fmt(r.crystal.mean * n), "所有模拟消耗矛盾的平均值。极欧或极非会把这个数拉高或拉低。" + many],
-        [piece + "矛盾 P90", fmt(r.crystal.p90 * n), "90% 的模拟消耗不超过这个数。剩下 10% 更倒霉，用来看最坏情况要准备多少。" + many],
-        [piece + "幸运符中位数", fmt(r.charm.p50 * n), "一半的模拟用掉的幸运符不超过这个数。没开符或该档不用符时是 0。" + many],
-        [piece + "幸运符期望", fmt(r.charm.mean * n), "所有模拟消耗幸运符的平均值。" + many],
-        [piece + "最少矛盾", fmt(r.crystal.min * n), "这些次模拟里，消耗矛盾最少的那一次。" + many],
-        [piece + "最多矛盾", fmt(r.crystal.max * n), "这些次模拟里，消耗矛盾最多的那一次。" + many],
-        [piece + "最少幸运符", fmt(r.charm.min * n), "这些次模拟里，消耗幸运符最少的那一次。" + many],
-        [piece + "最多幸运符", fmt(r.charm.max * n), "这些次模拟里，消耗幸运符最多的那一次。" + many],
-        [piece + "胚子中位数", (r.embryo.p50 * n).toFixed(1), "一半的模拟用掉的胚子数（含第一件；破坏后换新也算）。置换下来的那件不另计一件。" + many],
-        [piece + "胚子期望", (r.embryo.mean * n).toFixed(2), "平均要用掉几件胚子。破坏越多，这个数越大。" + many],
-        [piece + "尝试中位数", fmt(r.attempt.p50 * n), "一半的模拟里，点「增幅」的次数不超过这个数。" + many],
-        [piece + "破坏中位数", (r.destroy.p50 * n).toFixed(1), "一半的模拟里，胚子被破坏的次数不超过这个数。" + many],
-      ].map(([k, v, tip]) =>
-        `<div class="cell"><span>${k}</span><b class="num">${v}</b><small>${tip}</small></div>`
-      ).join("");
+      lastMcPaint = { r, start, target, isWeapon, count };
+      paintMcOut();
       renderMcAdvice(start, target, isWeapon, count);
     };
 
@@ -916,9 +1323,55 @@
     return ((b - a) / b) * 100;
   }
 
+  let lastMcPaint = null;
+
+  function paintMcOut() {
+    if (!lastMcPaint) return;
+    const { r, count } = lastMcPaint;
+    const n = count;
+    const piece = n > 1 ? n + "件" : "";
+    const many = n > 1 ? "按 " + n + " 件合计。" : "";
+    const teraMean = teraOf(r.crystal.mean * n, r.charm.mean * n);
+    const teraP50 = teraOf(r.crystal.p50 * n, r.charm.p50 * n);
+    const synthMean = synthOf(teraMean);
+    const rmbMean = rmbOfSynth(synthMean);
+    const rows = [
+      ["达成率", (r.reachRate * 100).toFixed(1) + "%", "这么多次独立模拟里，最终打到目标等级的比例。会一直打到目标，所以一般是 100%。"],
+      [piece + "矛盾中位数", fmt(r.crystal.p50 * n), "一半的模拟消耗的矛盾不超过这个数，比平均数更接近普通人的花费。" + many],
+      [piece + "矛盾期望", fmt(r.crystal.mean * n), "所有模拟消耗矛盾的平均值。极欧或极非会把这个数拉高或拉低。" + many],
+      [piece + "矛盾 P90", fmt(r.crystal.p90 * n), "90% 的模拟消耗不超过这个数。剩下 10% 更倒霉，用来看最坏情况要准备多少。" + many],
+      [piece + "幸运符中位数", fmt(r.charm.p50 * n), "一半的模拟用掉的幸运符不超过这个数。没开符或该档不用符时是 0。" + many],
+      [piece + "幸运符期望", fmt(r.charm.mean * n), "所有模拟消耗幸运符的平均值。" + many],
+      [piece + "期望泰拉", fmtTera(teraMean), "按你填的矛盾、幸运符单价，把期望消耗折成泰拉。" + many],
+      [piece + "中位数泰拉", fmtTera(teraP50), "按中位数矛盾和幸运符折成泰拉，更接近普通人的花费。" + many],
+      [piece + "约等于装扮合成器", fmtSynth(synthMean), "期望泰拉 ÷ 到手泰拉（标价打 9 折），四舍五入取整。单价填 0 时不折算。" + many],
+      [piece + "期望 RMB", fmtRmb(rmbMean), "合成器个数 × 5 元。单价填 0 时不折算。" + many],
+      [piece + "最少矛盾", fmt(r.crystal.min * n), "这些次模拟里，消耗矛盾最少的那一次。" + many],
+      [piece + "最多矛盾", fmt(r.crystal.max * n), "这些次模拟里，消耗矛盾最多的那一次。" + many],
+      [piece + "最少幸运符", fmt(r.charm.min * n), "这些次模拟里，消耗幸运符最少的那一次。" + many],
+      [piece + "最多幸运符", fmt(r.charm.max * n), "这些次模拟里，消耗幸运符最多的那一次。" + many],
+      [piece + "胚子中位数", (r.embryo.p50 * n).toFixed(1), "一半的模拟用掉的胚子数（含第一件；破坏后换新也算）。置换下来的那件不另计一件。" + many],
+      [piece + "胚子期望", (r.embryo.mean * n).toFixed(2), "平均要用掉几件胚子。破坏越多，这个数越大。" + many],
+      [piece + "尝试中位数", fmt(r.attempt.p50 * n), "一半的模拟里，点「增幅」的次数不超过这个数。" + many],
+      [piece + "破坏中位数", (r.destroy.p50 * n).toFixed(1), "一半的模拟里，胚子被破坏的次数不超过这个数。" + many],
+    ];
+    byId("mcOut").innerHTML = rows.map(([k, v, tip]) =>
+      `<div class="cell"><span>${k}</span><b class="num">${v}</b><small>${tip}</small></div>`
+    ).join("");
+  }
+
+  function refreshCostViews() {
+    renderSpent();
+    renderMarketSummary();
+    if (lastMcPaint) {
+      paintMcOut();
+      renderMcAdvice(lastMcPaint.start, lastMcPaint.target, lastMcPaint.isWeapon, lastMcPaint.count);
+    }
+  }
+
   function renderMcAdvice(start, target, isWeapon, count) {
     const box = byId("mcAdvice");
-    const prices = C.tera || { crystal: 200, charm: 11000 };
+    const prices = getMarket();
     const advice = E.adviseSet({
       start,
       target,
@@ -964,15 +1417,25 @@
       "。" + how +
       "置换后胚子变回 +" + start + "，下一件从 +" + start + " 接着打。" +
       "矛盾 <b>" + fmt(prices.crystal) + "</b> 泰拉一个、幸运符 <b>" + fmt(prices.charm) +
-      "</b> 泰拉一个折算。合计期望约 <b class=\"num\">" + fmtTera(best.tera) + "</b>。</p>" +
+      "</b> 泰拉一个折算。合计期望约 <b class=\"num\">" + fmtTera(best.tera) + "</b>" +
+      (function () {
+        const syn = synthOf(best.tera, prices);
+        if (syn == null) return "";
+        return "，约等于 <b class=\"num\">" + fmtSynth(syn) + "</b> 个装扮合成器，约 <b class=\"num\">" +
+          fmtRmb(rmbOfSynth(syn)) + "</b> 元";
+      }()) +
+      "。</p>" +
       (cmp.length ? "<p>" + cmp.join("；") + "。</p>" : "") +
-      '<p class="hint">按期望值扫开符档，和上面抽样表不是同一套数字。行情按矛盾 ' +
-      fmt(prices.crystal) + "、幸运符 " + fmt(prices.charm) + " 泰拉。</p>";
+      '<p class="hint">按期望值扫开符档，和上面抽样表不是同一套数字。行情按商城里保存的单价折算。</p>';
   }
 
   function goTab(name) {
     $$(".tabs button").forEach((t) => t.classList.toggle("active", t.dataset.tab === name));
     $$(".panel").forEach((p) => p.classList.toggle("active", p.id === "panel-" + name));
+    if (name === "shop") {
+      syncMarketInputs();
+      renderExchangePreview();
+    }
     sfx("tab");
   }
 
@@ -1040,6 +1503,55 @@
     bindClamp("mcCount", 1, C.monteCarlo.maxCount || 12);
     bindClamp("autoTarget", 1, D.MAX_LEVEL);
     bindClamp("autoCharmFrom", 0, D.MAX_LEVEL);
+    byId("btnHudRail").onclick = toggleHud;
+    byId("btnHudFold").onclick = toggleHud;
+    const hudBg = byId("hudBackdrop");
+    if (hudBg) hudBg.onclick = () => {
+      state.hud = { open: false };
+      applyHud();
+      save();
+    };
+    renderShopCatalog();
+    byId("rechargeBox").addEventListener("click", (ev) => {
+      const btn = ev.target.closest("[data-recharge]");
+      if (!btn) return;
+      doRecharge(Number(btn.dataset.recharge));
+    });
+    const shopBuy = byId("shopBuyArea");
+    shopBuy.addEventListener("click", (ev) => {
+      const btn = ev.target.closest("[data-buy]");
+      if (!btn) return;
+      doBuy(btn.dataset.buy);
+    });
+    shopBuy.addEventListener("input", (ev) => {
+      const el = ev.target.closest("[data-buy-qty]");
+      if (el) clampBuyQty(el);
+    });
+    shopBuy.addEventListener("change", (ev) => {
+      const el = ev.target.closest("[data-buy-qty]");
+      if (el) clampBuyQty(el);
+    });
+    byId("btnExchange").onclick = doExchange;
+    const exQty = byId("exQty");
+    if (exQty) {
+      const onExQty = () => {
+        clampExQty();
+        renderExchangePreview();
+      };
+      exQty.addEventListener("input", onExQty);
+      exQty.addEventListener("change", onExQty);
+    }
+    byId("btnMarketOk").onclick = applyMarket;
+    ["mktCrystal", "mktCharm", "mktSynth"].forEach((id) => {
+      const el = byId(id);
+      if (!el) return;
+      el.addEventListener("keydown", (ev) => {
+        if (ev.key === "Enter") {
+          ev.preventDefault();
+          applyMarket();
+        }
+      });
+    });
     byId("btnAmp").onclick = () => amplifyOnce();
     byId("btnSkipAnim").onclick = skipAmpAnim;
     byId("btnCloseResult").onclick = closeAmpOverlay;
@@ -1097,8 +1609,9 @@
       autoTick();
     };
     byId("btnDropBroken").onclick = dropBroken;
+    byId("btnClearWallet").onclick = clearWallet;
     byId("btnClear").onclick = () => {
-      if (!confirm("清空背包、身上增幅和消耗统计？")) return;
+      if (!confirm("清空背包、身上增幅和消耗统计？点券、泰拉、矛盾、幸运符和合成器不会清。")) return;
       state.bag = [];
       state.selectedId = null;
       state.spent = { crystal: 0, charm: 0 };
@@ -1177,8 +1690,15 @@
   }
 
   bind();
-  load();
+  if (!load()) {
+    state.market = defaultMarket();
+    state.wallet = defaultWallet();
+    state.hud = defaultHud();
+  }
+  applyHud();
+  syncMarketInputs();
+  renderShopCatalog();
   renderTable();
   render();
-  log("点背包里的胚子放进增幅机，再增幅。破坏后这件留下，但不能再放入增幅器。");
+  log("先去商城备好矛盾；开符还要幸运符。点背包里的胚子放进增幅机再打。");
 })();

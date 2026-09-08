@@ -123,11 +123,55 @@ window.DNFConfig = {
     chargeMs: 1400,                   /* 增幅中时长，点跳过会立刻出结果 */
   },
 
-  /* ---------- 拍卖行情（泰拉，演算评测用） ---------- */
+  /* ---------- 拍卖行情默认值（界面可改，全局生效） ---------- */
   tera: {
-    crystal: 200,
-    charm: 11000,
-    rmbPerTera: 1400, /* 泰拉 ÷ 此值 = 预估人民币 */
+    crystal: 200,        /* 矛盾价值泰拉 */
+    charm: 11000,        /* 幸运符价值泰拉 */
+    synth: 0,            /* 装扮合成器价值泰拉（拍卖标价） */
+    synthIncomeRate: 0.9, /* 标价 × 此值 = 到手泰拉 */
+    rmbPerSynth: 5,      /* 一个装扮合成器 = 5 元 */
+  },
+
+  /* ---------- 假充值 / 商城（只改这里就能加档位和商品） ---------- */
+  shop: {
+    recharge: [
+      { rmb: 1, coupon: 10 },
+      { rmb: 6, coupon: 62 },
+      { rmb: 30, coupon: 310 },
+      { rmb: 68, coupon: 710 },
+      { rmb: 128, coupon: 1340 },
+      { rmb: 198, coupon: 2100 },
+      { rmb: 328, coupon: 3520 },
+      { rmb: 648, coupon: 6980 },
+    ],
+    goods: [
+      {
+        id: "synth",
+        name: "装扮合成器",
+        desc: "点券购买，可按行情兑泰拉",
+        currency: "coupon",
+        price: 50,
+        give: { synth: 1 },
+      },
+      {
+        id: "crystal",
+        name: "矛盾",
+        desc: "增幅必耗。单价按行情「矛盾价值泰拉」",
+        currency: "tera",
+        priceFrom: "crystal",
+        give: { crystal: 1 },
+      },
+      {
+        id: "charm",
+        name: "幸运符",
+        desc: "开符时消耗。单价按行情「幸运符价值泰拉」",
+        currency: "tera",
+        priceFrom: "charm",
+        give: { charm: 1 },
+      },
+    ],
+    maxBuy: 9999,
+    maxExchange: 999,
   },
 
   /* ---------- 演算 ---------- */

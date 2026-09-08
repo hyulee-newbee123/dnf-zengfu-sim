@@ -13,28 +13,54 @@
 </head>
 <body>
   <button type="button" class="sfx-toggle" id="btn-sfx" title="循环：开 / 低 / 关">音效 开</button>
+  <aside class="hud-sidebar is-min" id="hudSidebar">
+    <button type="button" class="hud-rail" id="btnHudRail" aria-expanded="false" title="展开数据信息">
+      <span>数据信息</span>
+    </button>
+    <div class="hud-sidebar-panel">
+      <div class="hud-sidebar-top">
+        <strong>数据信息</strong>
+        <button type="button" class="hud-fold" id="btnHudFold">收起</button>
+      </div>
+      <section class="hud-section">
+        <h3>资产</h3>
+        <div class="wallet-list" id="assetBox">
+          <div class="pill">点券 <span class="num" id="walCoupon">0</span></div>
+          <div class="pill">装扮合成器 <span class="num" id="walSynth">0</span></div>
+          <div class="pill">持有泰拉 <span class="num" id="walTera">0</span></div>
+          <div class="pill">矛盾 <span class="num" id="walCrystal">0</span></div>
+          <div class="pill">幸运符 <span class="num" id="walCharm">0</span></div>
+          <div class="pill">已充值 RMB <span class="num" id="walRmb">0</span></div>
+          <button type="button" class="btn danger hud-clear" id="btnClearWallet">清空资产</button>
+        </div>
+      </section>
+      <section class="hud-section">
+        <h3>消耗统计</h3>
+        <div class="wallet-list" id="spentBox">
+          <div class="pill">已消耗矛盾 <span class="num" id="spentCrystal">0</span></div>
+          <div class="pill">已消耗幸运符 <span class="num" id="spentCharm">0</span></div>
+          <div class="pill">预估消耗泰拉 <span class="num" id="spentTera">0</span></div>
+          <div class="pill">约等于装扮合成器 <span class="num" id="spentSynth">—</span></div>
+          <div class="pill">预估消耗 RMB <span class="num" id="spentRmb">—</span></div>
+        </div>
+      </section>
+    </div>
+  </aside>
+  <div class="hud-backdrop" id="hudBackdrop" hidden></div>
   <div class="app">
     <header class="hero">
       <div class="eyebrow">地下城与勇士手游 · 模拟器</div>
       <div class="hero-title">
         <h1>增幅机</h1>
-        <span class="ver">v1.10</span>
+        <span class="ver">v2.0</span>
       </div>
       <p>成功 / 降级 / 破坏 · 纯属娱乐</p>
-      <div class="hero-spent">
-        <div class="hero-spent-label">消耗统计</div>
-        <div class="wallet-list" id="spentBox">
-          <div class="pill">已消耗矛盾 <span class="num" id="spentCrystal">0</span></div>
-          <div class="pill">已消耗幸运符 <span class="num" id="spentCharm">0</span></div>
-          <div class="pill">预估消耗泰拉 <span class="num" id="spentTera">0</span></div>
-          <div class="pill">预估消耗 RMB <span class="num" id="spentRmb">0</span></div>
-        </div>
-      </div>
     </header>
     <div class="ornament"></div>
 
     <nav class="tabs">
       <button class="active" data-tab="amp">增幅</button>
+      <button data-tab="shop">商城</button>
       <button data-tab="swap">置换</button>
       <button data-tab="calc">演算</button>
       <button data-tab="rules">规则</button>
@@ -67,7 +93,7 @@
 
         <div class="forge" id="stage">
           <div class="forge-title">增幅机</div>
-          <p class="hint">只打背包里选中的那一件。没选中时先点左侧胚子。失败从 +10 起会破坏，胚子留下但不能再放入增幅器。</p>
+          <p class="hint">只打背包里选中的那一件。先充值兑泰拉，再买矛盾；开符还要买幸运符。材料不够不能增幅。失败从 +10 起会破坏，胚子留下但不能再放入增幅器。</p>
           <div class="result-pop" id="pop"></div>
           <div class="altar empty" id="eqIcon">
             <div class="altar-marquee" aria-hidden="true">
@@ -88,7 +114,7 @@
             <div><b class="num" id="failTxt">必成</b><span id="failHint">本档必成</span></div>
           </div>
           <div class="costs" id="costRow"></div>
-          <div class="btn-row" style="justify-content:center">
+          <div class="btn-row center-row">
             <button type="button" class="btn" id="btnCharm">使用幸运符 · 关</button>
           </div>
           <button type="button" class="btn gold btn-amp" id="btnAmp">增 幅</button>
@@ -112,13 +138,14 @@
                 </select>
               </label>
             </div>
-            <div class="btn-row" style="justify-content:center;margin-bottom:0">
+            <div class="btn-row center-row tight-row">
               <button type="button" class="btn gold" id="btnAuto">开始自动</button>
               <button type="button" class="btn" id="btnStop">停止</button>
             </div>
           </div>
-          <div class="btn-row" style="justify-content:center;margin-top:14px">
+          <div class="btn-row center-row jump-row">
             <button type="button" class="btn gold" data-go-tab="swap">去做置换</button>
+            <button type="button" class="btn" data-go-tab="shop">去商城</button>
             <button type="button" class="btn" data-go-tab="calc">去看演算</button>
           </div>
         </div>
@@ -132,19 +159,67 @@
       </div>
     </section>
 
+    <section id="panel-shop" class="panel">
+      <div class="block">
+        <h2>行情</h2>
+        <p class="hint">自己填单价，保存后全局生效。合成器标价打 9 折是到手泰拉；矛盾和幸运符按这里的单价用泰拉买。</p>
+        <p class="market-summary" id="marketSummary"></p>
+        <div class="market-grid">
+          <label>矛盾价值泰拉
+            <input type="number" id="mktCrystal" min="0" step="1" inputmode="decimal" />
+          </label>
+          <label>幸运符价值泰拉
+            <input type="number" id="mktCharm" min="0" step="1" inputmode="decimal" />
+          </label>
+          <label>装扮合成器价值泰拉
+            <input type="number" id="mktSynth" min="0" step="1" inputmode="decimal" />
+          </label>
+        </div>
+        <div class="btn-row tight-row">
+          <button type="button" class="btn gold" id="btnMarketOk">保存行情</button>
+        </div>
+      </div>
+      <div class="block">
+        <h2>假充值</h2>
+        <p class="hint">点一下立刻到账，不走真实支付。</p>
+        <div class="recharge-grid" id="rechargeBox"></div>
+      </div>
+      <div class="block" id="shopBuyArea">
+        <h2>点券商城</h2>
+        <p class="hint">用点券买。当前只卖装扮合成器，后续商品也加在这里。</p>
+        <div class="goods-grid" id="shopGoodsCoupon"></div>
+        <h2 class="block-sub">泰拉商城</h2>
+        <p class="hint">用持有泰拉买。单价按上面行情，没填的买不了。</p>
+        <div class="goods-grid" id="shopGoodsTera"></div>
+      </div>
+      <div class="block">
+        <h2>兑换泰拉</h2>
+        <p class="hint">用装扮合成器兑泰拉。到手 = 合成器价值泰拉 × 0.9。先保存行情再兑。</p>
+        <div class="exchange-box">
+          <p class="exchange-meta" id="exPreview"></p>
+          <div class="exchange-row">
+            <label>兑换数量
+              <input type="number" id="exQty" min="1" max="999" value="1" inputmode="numeric" />
+            </label>
+            <button type="button" class="btn gold" id="btnExchange">兑换泰拉</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
     <section id="panel-swap" class="panel">
       <h2>增幅等级置换</h2>
       <p class="hint">点每个部位上的「置换」，从背包里选一件同类型且等级更高的胚子。等级数字可以自己改，方便试。互换后双方对调，胚子留在背包里。</p>
       <p class="hint" id="swapPickHint">点下面的部位开始选。</p>
       <div class="slots" id="slotGrid"></div>
-      <div class="btn-row" style="margin-top:16px">
+      <div class="btn-row jump-row">
         <button type="button" class="btn" data-go-tab="amp">回增幅机</button>
       </div>
     </section>
 
     <section id="panel-calc" class="panel">
       <h2>期望消耗演算</h2>
-      <p class="hint">按你填的类型、件数、起始和目标来算。破坏后新胚子从 0 重来；置换后胚子回到起始等级，下一件接着打。开了幸运符时，低于设定等级不会消耗。中位数比平均数更接近普通人的花费。</p>
+      <p class="hint">按你填的类型、件数、起始和目标来算。破坏后新胚子从 0 重来；置换后胚子回到起始等级，下一件接着打。开了幸运符时，低于设定等级不会消耗。中位数比平均数更接近普通人的花费。泰拉、合成器和人民币按行情里填的单价折算。</p>
       <div class="preset-grid" id="mcPresets"></div>
       <div class="form-grid">
         <label>胚子类型
@@ -186,6 +261,7 @@
         <p><b>置换</b>：部位对应（武器胚子只能换武器），且胚子等级必须更高。互换后对调，胚子留下。</p>
         <p><b>矛盾消耗</b>：按规则表逐档扣除。灰色行为估算值。金币按矛盾×2000 计算。</p>
         <p><b>随机</b>：每次独立抽样，无垫刀、无补偿池。</p>
+        <p><b>充值 / 商城</b>：假充值点一下到账点券。点券商城买装扮合成器，合成器打 9 折兑泰拉；泰拉商城按行情买矛盾和幸运符。增幅要先有对应材料，不够不能打。清空背包不会清资产。</p>
       </div>
       <div class="value-table-wrap">
         <table class="value-table" id="offTable"></table>
