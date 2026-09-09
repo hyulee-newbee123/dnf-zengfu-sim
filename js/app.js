@@ -17,6 +17,7 @@
     spent: { crystal: 0, charm: 0 },
     market: null,
     wallet: { coupon: 0, synth: 0, tera: 0, crystal: 0, charm: 0, rmb: 0 },
+    infinite: false,
     hud: { open: false },
   };
 
@@ -302,12 +303,31 @@
     return { coupon: 0, synth: 0, tera: 0, crystal: 0, charm: 0, rmb: 0 };
   }
 
+  function isInfinite() {
+    return !!state.infinite;
+  }
+
+  function toggleInfinite() {
+    state.infinite = !state.infinite;
+    save();
+    renderWallet();
+    renderStage();
+    clampAllBuyQty();
+    clampExQty();
+    renderExchangePreview();
+    sfx("tab");
+    toast(state.infinite ? "资产已设为无限" : "已关闭无限资产");
+  }
+
   function clearWallet() {
-    if (!confirm("清空点券、装扮合成器、持有泰拉、矛盾、幸运符和已充值？消耗统计不动。")) return;
+    if (!confirm("清空点券、装扮合成器、持有泰拉、矛盾、幸运符和已充值？无限资产也会关掉。消耗统计不动。")) return;
+    state.infinite = false;
     state.wallet = defaultWallet();
     save();
     renderWallet();
     renderStage();
+    clampAllBuyQty();
+    clampExQty();
     toast("资产已清空");
   }
 
@@ -371,6 +391,7 @@
   }
 
   function ampBlockReason(cost) {
+    if (isInfinite()) return null;
     const w = getWallet();
     if (w.crystal < cost.crystal) return "矛盾不足，先去商城用泰拉买";
     if ((cost.charm || 0) > 0 && w.charm < cost.charm) return "幸运符不足，先去商城用泰拉买";
@@ -389,12 +410,18 @@
       const el = byId(id);
       if (el) el.textContent = v;
     };
-    set("walCoupon", fmt(w.coupon));
-    set("walSynth", fmt(w.synth));
-    set("walTera", fmtHold(w.tera));
-    set("walCrystal", fmt(w.crystal));
-    set("walCharm", fmt(w.charm));
+    const hold = (n, pretty) => isInfinite() ? "无限" : (pretty ? fmtHold(n) : fmt(n));
+    set("walCoupon", hold(w.coupon));
+    set("walSynth", hold(w.synth));
+    set("walTera", hold(w.tera, true));
+    set("walCrystal", hold(w.crystal));
+    set("walCharm", hold(w.charm));
     set("walRmb", fmt(w.rmb));
+    const infBtn = byId("btnInfiniteWallet");
+    if (infBtn) {
+      infBtn.textContent = isInfinite() ? "无限资产 · 开" : "无限资产 · 关";
+      infBtn.classList.toggle("active", isInfinite());
+    }
     renderExchangePreview();
   }
 
@@ -434,7 +461,9 @@
   }
 
   function maxExQty() {
-    return Math.max(0, Math.min(shopCfg().maxExchange || 999, getWallet().synth || 0));
+    const cap = shopCfg().maxExchange || 999;
+    if (isInfinite()) return cap;
+    return Math.max(0, Math.min(cap, getWallet().synth || 0));
   }
 
   function clampExQty() {
@@ -457,10 +486,10 @@
     const qty = qtyEl ? clampNum(qtyEl.value, 1, cap) : 1;
     if (!(income > 0)) {
       el.textContent = "还没填装扮合成器价值泰拉。到商城上方保存行情后才能兑换。当前持有合成器 " +
-        fmt(w.synth) + " 个。";
+        (isInfinite() ? "无限" : fmt(w.synth)) + " 个。";
       return;
     }
-    el.textContent = "持有合成器 " + fmt(w.synth) + " 个。标价 " + fmt(getMarket().synth) +
+    el.textContent = "持有合成器 " + (isInfinite() ? "无限" : fmt(w.synth)) + " 个。标价 " + fmt(getMarket().synth) +
       " 泰拉，到手 " + fmtHold(income) + " 泰拉 / 个。兑 " + qty + " 个可得 " +
       fmtHold(income * qty) + " 泰拉。";
   }
@@ -482,6 +511,7 @@
     const cap = shopCfg().maxBuy || 9999;
     const unit = goodsPrice(item);
     if (!(unit > 0)) return 0;
+    if (isInfinite()) return cap;
     const have = Number(getWallet()[item.currency || "coupon"]) || 0;
     return Math.max(0, Math.min(cap, Math.floor(have / unit)));
   }
@@ -522,7 +552,7 @@
     const curKey = item.currency || "coupon";
     const w = getWallet();
     const cost = unit * qty;
-    w[curKey] = (w[curKey] || 0) - cost;
+    if (!isInfinite()) w[curKey] = (w[curKey] || 0) - cost;
     const give = item.give || {};
     Object.keys(give).forEach((k) => {
       w[k] = (w[k] || 0) + (Number(give[k]) || 0) * qty;
@@ -554,7 +584,7 @@
     const qtyEl = byId("exQty");
     const qty = clampNum(qtyEl && qtyEl.value, 1, maxEx);
     if (qtyEl) qtyEl.value = qty;
-    w.synth -= qty;
+    if (!isInfinite()) w.synth -= qty;
     w.tera += income * qty;
     state.wallet = sanitizeWallet(w);
     save();
@@ -575,6 +605,7 @@
       spent: state.spent,
       market: getMarket(),
       wallet: getWallet(),
+      infinite: isInfinite(),
       hud: sanitizeHud(state.hud),
     }));
   }
@@ -624,6 +655,7 @@
       }
       state.market = sanitizeMarket(raw.market);
       state.wallet = sanitizeWallet(raw.wallet);
+      state.infinite = !!raw.infinite;
       state.hud = sanitizeHud(raw.hud);
       return true;
     } catch {
@@ -779,13 +811,15 @@
     const cost = E.attemptCost(from, cur.weapon, charmOn && usable);
     const w = getWallet();
     const lack = from >= D.MAX_LEVEL ? null : ampBlockReason(cost);
-    const shortCry = w.crystal < cost.crystal;
-    const shortCharm = (cost.charm || 0) > 0 && w.charm < cost.charm;
+    const shortCry = !isInfinite() && w.crystal < cost.crystal;
+    const shortCharm = !isInfinite() && (cost.charm || 0) > 0 && w.charm < cost.charm;
+    const holdCry = isInfinite() ? "无限" : fmt(w.crystal);
+    const holdCharm = isInfinite() ? "无限" : fmt(w.charm);
     byId("costRow").innerHTML = from >= D.MAX_LEVEL
       ? '<div class="cost">已达增幅上限 ' + D.MAX_LEVEL + "</div>"
-      : `<div class="cost${shortCry ? " is-short" : ""}">矛盾 <strong class="num">${fmt(cost.crystal)}</strong> / 持有 ${fmt(w.crystal)}</div>
+      : `<div class="cost${shortCry ? " is-short" : ""}">矛盾 <strong class="num">${fmt(cost.crystal)}</strong> / 持有 ${holdCry}</div>
          <div class="cost">金币 <strong class="num">${fmt(cost.gold)}</strong></div>
-         <div class="cost${shortCharm ? " is-short" : ""}">幸运符 <strong class="num">${cost.charm}</strong> / 持有 ${fmt(w.charm)}</div>` +
+         <div class="cost${shortCharm ? " is-short" : ""}">幸运符 <strong class="num">${cost.charm}</strong> / 持有 ${holdCharm}</div>` +
         (lack ? '<div class="cost is-short">' + lack + "</div>" : "");
 
     if (state.fusing && byId("ampOverlay") && byId("ampOverlay").hidden) state.fusing = false;
@@ -1096,10 +1130,12 @@
       toast(lack, "deny");
       return { result: "poor" };
     }
-    const wal = getWallet();
-    wal.crystal -= cost.crystal;
-    wal.charm -= cost.charm || 0;
-    state.wallet = sanitizeWallet(wal);
+    if (!isInfinite()) {
+      const wal = getWallet();
+      wal.crystal -= cost.crystal;
+      wal.charm -= cost.charm || 0;
+      state.wallet = sanitizeWallet(wal);
+    }
     cur.crystal = (cur.crystal || 0) + cost.crystal;
     cur.charm = (cur.charm || 0) + (cost.charm || 0);
     state.spent.crystal = (state.spent.crystal || 0) + cost.crystal;
@@ -1652,6 +1688,7 @@
       autoTick();
     };
     byId("btnDropBroken").onclick = dropBroken;
+    byId("btnInfiniteWallet").onclick = toggleInfinite;
     byId("btnClearWallet").onclick = clearWallet;
     byId("btnClearSpent").onclick = clearSpent;
 
