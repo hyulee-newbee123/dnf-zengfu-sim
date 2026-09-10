@@ -1,0 +1,965 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>增幅流水分析</title>
+  <style>
+    :root {
+      --bg: #0c1a12;
+      --panel: #14261a;
+      --ink: #f3e6c8;
+      --dim: #c4b089;
+      --gold: #e4c46a;
+      --ok: #8fd18f;
+      --bad: #ff5a5a;
+      --line: rgba(228, 196, 106, 0.35);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      color: var(--ink);
+      font: 14px/1.55 "Noto Sans SC", "Microsoft YaHei", sans-serif;
+      background: #0c1a12;
+      padding: 24px 20px 48px;
+    }
+    .wrap { max-width: 1100px; margin: 0 auto; }
+    h1 { font-size: 28px; font-weight: 600; letter-spacing: 0.08em; margin: 0 0 6px; color: var(--gold); }
+    h2 { font-size: 18px; color: var(--gold); margin: 28px 0 10px; font-weight: 600; }
+    .sub { color: var(--dim); margin: 0 0 18px; }
+    .note {
+      border: 1px solid var(--gold);
+      background: #1a2e1c;
+      padding: 12px 14px;
+      margin: 0 0 18px;
+    }
+    .kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 10px; }
+    .kpi { border: 1px solid var(--line); background: var(--panel); padding: 12px; }
+    .kpi b { display: block; font-size: 22px; color: var(--gold); margin-bottom: 4px; }
+    .kpi span { color: var(--dim); font-size: 12px; }
+    .kpi.ok b { color: var(--ok); }
+    .kpi.bad b { color: var(--bad); }
+    .bars { display: grid; gap: 8px; }
+    .bar-row { display: grid; grid-template-columns: 64px 1fr 88px; gap: 8px; align-items: center; }
+    .bar-track { height: 18px; background: #0e1c12; border: 1px solid var(--line); position: relative; }
+    .bar-exp, .bar-act {
+      position: absolute; top: 0; bottom: 0; left: 0;
+    }
+    .bar-exp { background: rgba(196, 176, 137, 0.35); }
+    .bar-act { background: var(--gold); opacity: 0.9; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th, td { border-bottom: 1px solid var(--line); padding: 7px 8px; text-align: left; }
+    th { color: var(--dim); font-weight: 600; }
+    td.num, th.num { text-align: right; }
+    tr.ok td:last-child { color: var(--ok); }
+    tr.fail td:last-child { color: #e0a36a; }
+    tr.dead td:last-child { color: var(--bad); }
+    .filters { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 10px; }
+    .filters button {
+      appearance: none;
+      border: 1px solid var(--line);
+      background: #14261a;
+      color: var(--ink);
+      min-height: 34px;
+      padding: 4px 12px;
+      cursor: pointer;
+      font: inherit;
+    }
+    .filters button.on { border-color: var(--gold); color: var(--gold); }
+    .cutoff {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px 10px;
+      border: 1px solid var(--line);
+      background: var(--panel);
+      padding: 12px 14px;
+      margin: 0 0 14px;
+    }
+    .cutoff label { color: var(--gold); font-weight: 600; margin-right: 4px; }
+    .cutoff .hint { color: var(--dim); font-size: 12px; width: 100%; margin: 0; }
+    .cutoff input[type="number"], .drop input[type="number"] {
+      width: 56px;
+      min-height: 34px;
+      border: 1px solid var(--line);
+      background: #0e1c12;
+      color: var(--ink);
+      font: inherit;
+      text-align: center;
+    }
+    .cutoff .sep { color: var(--dim); }
+    .cutoff button {
+      appearance: none;
+      border: 1px solid var(--line);
+      background: #14261a;
+      color: var(--ink);
+      min-height: 34px;
+      padding: 4px 12px;
+      cursor: pointer;
+      font: inherit;
+    }
+    .cutoff button.primary { border-color: var(--gold); color: var(--gold); }
+    .drop {
+      border: 1px dashed var(--line);
+      background: var(--panel);
+      padding: 14px 16px;
+      margin: 0 0 14px;
+      text-align: left;
+    }
+    .drop.on, body.is-drag .drop { border-color: var(--gold); background: #1a2e1c; }
+    .drop b { color: var(--gold); }
+    .drop p { margin: 6px 0 10px; color: var(--dim); }
+    .drop p input { display: inline-block; vertical-align: middle; }
+    .drop .btns { display: flex; flex-wrap: wrap; gap: 8px; }
+    .drop button, .drop label {
+      appearance: none;
+      border: 1px solid var(--line);
+      background: #14261a;
+      color: var(--ink);
+      min-height: 34px;
+      padding: 4px 12px;
+      cursor: pointer;
+      font: inherit;
+    }
+    .drop button.primary { border-color: var(--gold); color: var(--gold); }
+    .list { max-height: 440px; overflow: auto; border: 1px solid var(--line); }
+    .daygrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 8px; margin-bottom: 12px; }
+    .day { border: 1px solid var(--line); background: var(--panel); padding: 10px; cursor: pointer; }
+    .day:hover, .day.on { border-color: var(--gold); }
+    .day b { color: var(--gold); }
+    .crumb { color: var(--dim); margin: 0 0 10px; }
+    .crumb button {
+      appearance: none;
+      border: 0;
+      background: none;
+      color: var(--gold);
+      padding: 0;
+      font: inherit;
+      cursor: pointer;
+    }
+    #cutY, #importYear { width: 72px; }
+    @media (max-width: 720px) {
+      .kpis, .daygrid { grid-template-columns: 1fr 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <p class="sub"><a href="index.html" style="color: var(--gold); text-decoration: none;">← 返回增幅机</a></p>
+    <h1>增幅流水分析</h1>
+    <p class="sub" id="rangeLine"></p>
+    <div class="drop" id="dropZone">
+      <b>导入流水</b>
+      <p>把文件拖到这一页即可：游戏知几导出的网页、Excel / CSV、文本都可以。按时间+变化去重。没有年份的记录按 <input id="importYear" type="number" min="2020" max="2099" value="2026" /> 年记入。</p>
+      <div class="btns">
+        <button type="button" class="primary" id="btnPick">选择文件</button>
+        <button type="button" id="btnClearExtra">清空全部</button>
+      </div>
+      <input id="filePick" type="file" multiple hidden />
+    </div>
+    <p class="sub" id="importMsg">现在是空的，把游戏知几导出的网页或表格拖进来。</p>
+    <div class="cutoff">
+      <label>仅统计此时间及之后</label>
+      <input id="cutY" type="number" min="2020" max="2099" /> <span class="sep">年</span>
+      <input id="cutM" type="number" min="1" max="12" /> <span class="sep">月</span>
+      <input id="cutD" type="number" min="1" max="31" /> <span class="sep">日</span>
+      <input id="cutH" type="number" min="0" max="23" /> <span class="sep">:</span>
+      <input id="cutMin" type="number" min="0" max="59" />
+      <button type="button" class="primary" id="btnCutApply">套用</button>
+      <button type="button" id="btnCutClear">看全部</button>
+      <p class="hint">总体、分档和逐条都会按这个时间节点重算。快捷按钮只给近 7 天 / 30 天 / 今年，细的自己填。点「看全部」就是整段。</p>
+    </div>
+    <div class="filters" id="cutPresets"></div>
+    <div class="note" id="note"></div>
+    <div class="kpis" id="kpis1"></div>
+    <div class="kpis" id="kpis2"></div>
+
+    <h2>各档实际成功率 vs 公示期望</h2>
+    <p class="sub" id="barHint"></p>
+    <div class="bars" id="lvBars"></div>
+
+    <h2>按时间拆开</h2>
+    <p class="sub" id="breakHint">天数少就按日；多了先按月，跨年先按年。点卡片往下看。</p>
+    <div class="crumb" id="breakNav"></div>
+    <div class="daygrid" id="daygrid"></div>
+
+    <h2>分档明细</h2>
+    <table>
+      <thead>
+        <tr><th>档位</th><th class="num">次数</th><th class="num">成功</th><th class="num">破坏</th><th class="num">实际</th><th class="num">期望</th><th>评价</th></tr>
+      </thead>
+      <tbody id="lvTable"></tbody>
+    </table>
+
+    <h2>逐条流水</h2>
+    <div class="filters" id="yearBtns"></div>
+    <div class="filters" id="monthBtns"></div>
+    <div class="filters" id="dayBtns"></div>
+    <div class="filters" id="typeBtns"></div>
+    <div class="filters" id="kindBtns"></div>
+    <p class="sub" id="countLine"></p>
+    <div class="list">
+      <table>
+        <thead><tr><th>时间</th><th>类型</th><th>变化</th><th>幸运符</th><th class="num">矛盾</th><th>结果</th></tr></thead>
+        <tbody id="rows"></tbody>
+      </table>
+    </div>
+  </div>
+  <script>
+    /* 每条：[时间, 变化, 幸运符0/1, 成功0/1, 可选 1=武器]。不写第 5 项按非武器。 */
+    const RAW = [];
+    const BASE = [100, 100, 100, 100, 80, 70, 60, 70, 60, 50, 40, 30, 20, 20, 20, 20, 20, 20, 20, 20];
+    const CRYSTAL_GEAR = [26, 39, 54, 72, 94, 123, 152, 210, 268, 354, 440, 485, 533, 587, 645, 710, 781, 859, 945, 1040];
+    const CRYSTAL_WEAPON = [35, 53, 73, 97, 126, 164, 203, 280, 357, 472, 587, 646, 711, 782, 860, 946, 1041, 1145, 1260, 1386];
+    function rowIsWeapon(kind) {
+      return kind === 1 || kind === true || kind === "w" || kind === "武器";
+    }
+    const STORE = "amp-log-after";
+    const EXTRA_STORE = "amp-log-extra-v2";
+    try { localStorage.removeItem("amp-log-extra-v1"); } catch (e) {}
+
+    function pad2(n) { return String(n).padStart(2, "0"); }
+    function defaultYear() {
+      const el = document.getElementById("importYear");
+      const y = el ? +el.value : 2026;
+      return y >= 2000 && y <= 2100 ? y : 2026;
+    }
+    function stampKey(y, mo, d, h, mi, se) {
+      return Date.UTC(y, mo - 1, d, h || 0, mi || 0, se || 0);
+    }
+    function parseStamp(t) {
+      const s = String(t || "").trim();
+      let m = s.match(/^(\d{4})[-/年.](\d{1,2})[-/月.](\d{1,2})日?\s+(\d{1,2}):(\d{1,2})(?::(\d{1,2}))?/);
+      if (m) {
+        const y = +m[1], mo = +m[2], d = +m[3], h = +m[4], mi = +m[5], se = +(m[6] || 0);
+        return { y, mo, d, h, mi, se, hasYear: true, key: stampKey(y, mo, d, h, mi, se) };
+      }
+      m = s.match(/^(\d{1,2})-(\d{1,2}) (\d{1,2}):(\d{1,2})(?::(\d{1,2}))?$/);
+      if (!m) return null;
+      const y = defaultYear(), mo = +m[1], d = +m[2], h = +m[3], mi = +m[4], se = +(m[5] || 0);
+      return { y, mo, d, h, mi, se, hasYear: false, key: stampKey(y, mo, d, h, mi, se) };
+    }
+    function expectRate(from, charm) {
+      const base = BASE[from] || 0;
+      const bonus = charm && from >= 4 ? (from >= 12 ? 2 : 5) : 0;
+      return Math.min(100, base + bonus);
+    }
+    function charmSheets(from, charm) {
+      if (!charm || from < 4) return 0;
+      if (from >= 16) return 8;
+      if (from >= 12) return 4;
+      if (from >= 10) return 2;
+      return 1;
+    }
+    function fmt(n) { return Number(n).toLocaleString("zh-CN"); }
+    function fmtTime(y, mo, d, h, mi) {
+      return (y ? y + "年" : "") + pad2(mo) + "月" + pad2(d) + "日 " + pad2(h) + ":" + pad2(mi);
+    }
+    function uniqueYears(rows) {
+      return Array.from(new Set((rows || ROWS).map((r) => r.y))).sort((a, b) => b - a);
+    }
+    function showStamp(t) {
+      if (uniqueYears(ROWS).length <= 1) return String(t).replace(/^\d{4}-/, "");
+      return t;
+    }
+    function tagOf(delta) {
+      if (delta >= 5) return "欧";
+      if (delta <= -3) return "黑";
+      return "贴线";
+    }
+
+    function hydrate(row) {
+      const [t, chg, charm, ok, kind] = row;
+      const stamp = parseStamp(t);
+      const parts = String(chg).match(/^(\d+)→(.+)$/);
+      const from = parts ? +parts[1] : 0;
+      const dest = String(chg).includes("损坏");
+      const to = dest ? 0 : (parts && /^\d+$/.test(parts[2]) ? +parts[2] : from);
+      const used = !!charm;
+      const weapon = rowIsWeapon(kind);
+      const table = weapon ? CRYSTAL_WEAPON : CRYSTAL_GEAR;
+      const y = stamp ? stamp.y : defaultYear();
+      const mo = stamp ? stamp.mo : 0;
+      const d = stamp ? stamp.d : 0;
+      const day = y + "-" + pad2(mo) + "-" + pad2(d);
+      return {
+        t, day, month: y + "-" + pad2(mo), y, chg, from, to, weapon,
+        type: weapon ? "武器" : "非武器",
+        charm: used, sheets: charmSheets(from, used),
+        ok: !!ok, destroy: dest, to11: String(chg).endsWith("→11"),
+        p: expectRate(from, used),
+        crystal: table[from] || 0,
+        key: stamp ? stamp.key : 0,
+        mo, d,
+        h: stamp ? stamp.h : 0,
+        mi: stamp ? stamp.mi : 0
+      };
+    }
+    function normalizeTime(s) {
+      const p = parseStamp(String(s || "").trim());
+      if (!p) return "";
+      return p.y + "-" + pad2(p.mo) + "-" + pad2(p.d) + " " + pad2(p.h) + ":" + pad2(p.mi) + ":" + pad2(p.se);
+    }
+    function normalizeChg(chg) {
+      let s = String(chg || "").replace(/\s/g, "");
+      s = s.replace(/[—－–~～]/g, "-").replace(/->|＞|>/g, "→");
+      s = s.replace(/破坏|損坏|損壊/g, "损坏");
+      const m = s.match(/^(\d{1,2})→(\d{1,2}|损坏)$/);
+      if (!m) return "";
+      return m[2] === "损坏" ? Number(m[1]) + "→损坏" : Number(m[1]) + "→" + Number(m[2]);
+    }
+    function normalizeRaw(row) {
+      if (!row) return null;
+      let t, chg, charm, ok, kind;
+      if (Array.isArray(row)) {
+        t = row[0]; chg = row[1]; charm = row[2]; ok = row[3]; kind = row[4];
+      } else {
+        t = row.t || row.time || row.时间;
+        chg = row.chg || row.change || row.增幅变化 || row.变化;
+        charm = row.charm || row.幸运符;
+        ok = row.ok != null ? row.ok : row.结果;
+        kind = row.weapon != null ? row.weapon : (row.kind || row.类型 || row.name || row.道具名称);
+      }
+      const nt = normalizeTime(t);
+      const nc = normalizeChg(chg);
+      if (!nt || !nc) return null;
+      const used = charm === 1 || charm === true || /使用/.test(String(charm || "")) && !/未使用/.test(String(charm || ""));
+      let success = ok === 1 || ok === true || /成功/.test(String(ok || ""));
+      if (/损坏/.test(nc) || /失败|破坏/.test(String(ok || ""))) success = false;
+      if (ok == null && !/成功|失败|破坏/.test(String(ok || ""))) {
+        const to = nc.split("→")[1];
+        success = to !== "损坏" && Number(to) === Number(nc.split("→")[0]) + 1;
+      }
+      const weapon = rowIsWeapon(kind) || (/武器/.test(String(kind || "")) && !/非武器/.test(String(kind || "")));
+      return [nt, nc, used ? 1 : 0, success ? 1 : 0, weapon ? 1 : 0];
+    }
+    function fp(row) {
+      const n = normalizeRaw(row) || row;
+      return n[0] + "|" + n[1] + "|" + n[2] + "|" + n[3] + "|" + (n[4] ? 1 : 0);
+    }
+    function mergeRaw(seed, extra) {
+      const seen = new Set();
+      const out = [];
+      function add(row) {
+        const n = normalizeRaw(row);
+        if (!n) return;
+        const k = fp(n);
+        if (seen.has(k)) return;
+        seen.add(k);
+        out.push(n);
+      }
+      (extra || []).forEach(add);
+      (seed || []).forEach(add);
+      out.sort((a, b) => {
+        const ka = parseStamp(a[0]);
+        const kb = parseStamp(b[0]);
+        return (kb ? kb.key : 0) - (ka ? ka.key : 0);
+      });
+      return out;
+    }
+    function loadExtras() {
+      try {
+        const raw = JSON.parse(localStorage.getItem(EXTRA_STORE) || "[]");
+        return Array.isArray(raw) ? raw.map(normalizeRaw).filter(Boolean) : [];
+      } catch (e) {
+        return [];
+      }
+    }
+    function saveExtras() {
+      try { localStorage.setItem(EXTRA_STORE, JSON.stringify(extras)); } catch (e) {}
+    }
+
+    let extras = loadExtras();
+    let ROWS = [];
+    let first = { y: 2026, mo: 9, d: 1, h: 0, mi: 0 };
+    function rebuild() {
+      ROWS = mergeRaw(RAW, extras).map(hydrate);
+      first = ROWS[ROWS.length - 1] || first;
+    }
+    rebuild();
+
+    let afterKey = null;
+    let preset = "all";
+    let drill = null;
+    let yearFilter = "all";
+    let monthFilter = "all";
+    let day = "all";
+    let typeFilter = "all";
+    let kind = "all";
+
+    function readCutoff() {
+      return {
+        y: +document.getElementById("cutY").value,
+        mo: +document.getElementById("cutM").value,
+        d: +document.getElementById("cutD").value,
+        h: +document.getElementById("cutH").value,
+        mi: +document.getElementById("cutMin").value
+      };
+    }
+    function fillCutoff(y, mo, d, h, mi) {
+      document.getElementById("cutY").value = y;
+      document.getElementById("cutM").value = mo;
+      document.getElementById("cutD").value = d;
+      document.getElementById("cutH").value = pad2(h);
+      document.getElementById("cutMin").value = pad2(mi);
+    }
+    function scoped() {
+      if (afterKey == null) return ROWS;
+      return ROWS.filter((r) => r.key >= afterKey);
+    }
+    function summarize(rows) {
+      const n = rows.length;
+      let ok = 0, dest = 0, to11 = 0, dest10 = 0, crystal = 0, sheets = 0, expOk = 0, expVar = 0;
+      let nW = 0, nG = 0, cryW = 0, cryG = 0;
+      const byLv = {};
+      const byDay = {};
+      const byMonth = {};
+      const byYear = {};
+      function bump(map, key, extra, row) {
+        if (!map[key]) map[key] = Object.assign({ n: 0, ok: 0, dest: 0, to11: 0 }, extra);
+        const x = map[key];
+        x.n += 1;
+        if (row.ok) x.ok += 1;
+        if (row.destroy) x.dest += 1;
+        if (row.to11) x.to11 += 1;
+      }
+      rows.forEach((r) => {
+        if (r.ok) ok += 1;
+        if (r.destroy) dest += 1;
+        if (r.to11) to11 += 1;
+        if (r.destroy && r.from === 10) dest10 += 1;
+        crystal += r.crystal;
+        sheets += r.sheets;
+        if (r.weapon) { nW += 1; cryW += r.crystal; }
+        else { nG += 1; cryG += r.crystal; }
+        const p = r.p / 100;
+        expOk += p;
+        expVar += p * (1 - p);
+        if (!byLv[r.from]) byLv[r.from] = { from: r.from, n: 0, ok: 0, dest: 0, exp: 0 };
+        const lv = byLv[r.from];
+        lv.n += 1;
+        if (r.ok) lv.ok += 1;
+        if (r.destroy) lv.dest += 1;
+        lv.exp += r.p;
+        bump(byDay, r.day, { id: r.day, kind: "day", y: r.y, mo: r.mo, d: r.d }, r);
+        bump(byMonth, r.month, { id: r.month, kind: "month", y: r.y, mo: r.mo }, r);
+        bump(byYear, String(r.y), { id: String(r.y), kind: "year", y: r.y }, r);
+      });
+      const levels = Object.keys(byLv).map(Number).sort((a, b) => a - b).map((k) => {
+        const x = byLv[k];
+        const actual = x.n ? (x.ok / x.n) * 100 : 0;
+        const expect = x.n ? x.exp / x.n : 0;
+        return { from: x.from, n: x.n, ok: x.ok, dest: x.dest, actual, expect, delta: actual - expect };
+      });
+      const days = Object.keys(byDay).sort().reverse().map((k) => byDay[k]);
+      const months = Object.keys(byMonth).sort().reverse().map((k) => byMonth[k]);
+      const years = Object.keys(byYear).sort().reverse().map((k) => byYear[k]);
+      const fail = n - ok;
+      const actualPct = n ? (ok / n) * 100 : 0;
+      const expectPct = n ? (expOk / n) * 100 : 0;
+      const z = expVar > 0 ? (ok - expOk) / Math.sqrt(expVar) : 0;
+      return { n, ok, fail, dest, to11, dest10, crystal, sheets, nW, nG, cryW, cryG, expOk, actualPct, expectPct, z, levels, days, months, years };
+    }
+    function verdict(s) {
+      if (!s.n) return { title: "这段没有流水。", body: "把时间节点改早一点，或点「看全部」。" };
+      const tone = s.z >= 0.4 ? "略欧" : s.z <= -0.4 ? "略黑" : "贴线";
+      const hot = s.levels.filter((x) => x.n >= 3);
+      const lucky = hot.filter((x) => x.delta >= 5).sort((a, b) => b.delta - a.delta);
+      const dark = hot.filter((x) => x.delta <= -3).sort((a, b) => a.delta - b.delta);
+      let body = "期望成功约 " + s.expOk.toFixed(1) + " 次，实际 " + s.ok + " 次。";
+      if (lucky.length) body += " 欧在 " + lucky.map((x) => "+" + x.from).join(" / ") + "，尤其 +" + lucky[0].from + "。";
+      if (dark.length) body += " 黑在 " + dark.map((x) => "+" + x.from).join(" / ") + "。";
+      if (!lucky.length && !dark.length) body += " 各档都贴着期望走。";
+      body += " 打出 " + s.to11 + " 件 +11，+10 碎了 " + s.dest10 + " 次。";
+      return { title: "总体：" + tone + "。", body };
+    }
+    function kpi(html, cls) {
+      return '<div class="kpi' + (cls ? " " + cls : "") + '">' + html + "</div>";
+    }
+    function paintStats(rows) {
+      const s = summarize(rows);
+      const v = verdict(s);
+      const start = rows[rows.length - 1];
+      const end = rows[0];
+      const c = readCutoff();
+      const cutTxt = afterKey == null
+        ? "整段流水"
+        : "仅 " + fmtTime(c.y, c.mo, c.d, c.h, c.mi) + " 及之后";
+      const mix = [s.nW ? "武器 " + s.nW : "", s.nG ? "非武器 " + s.nG : ""].filter(Boolean).join(" · ");
+      document.getElementById("rangeLine").textContent = !s.n
+        ? cutTxt + " · 0 次"
+        : showStamp(start.t) + " 至 " + showStamp(end.t) + " · " + s.n + " 次 · " + mix + " · 从近到远 · " + cutTxt;
+      document.getElementById("note").innerHTML = "<b>" + v.title + "</b> " + v.body;
+      document.getElementById("kpis1").innerHTML =
+        kpi("<b>" + s.n + "</b><span>总次数</span>") +
+        kpi("<b>" + s.ok + " / " + s.fail + "</b><span>成功 / 失败</span>", "ok") +
+        kpi("<b>" + s.to11 + "</b><span>打上 +11</span>", "ok") +
+        kpi("<b>" + s.dest10 + "</b><span>+10 破坏</span>", "bad");
+      document.getElementById("kpis2").innerHTML =
+        kpi("<b>" + fmt(s.crystal) + "</b><span>" + (s.nW && s.nG
+          ? "矛盾 · 武器 " + fmt(s.cryW) + " / 非武器 " + fmt(s.cryG)
+          : "矛盾") + "</span>") +
+        kpi("<b>" + fmt(s.sheets) + "</b><span>幸运符张数</span>") +
+        kpi("<b>" + (s.n ? s.actualPct.toFixed(1) : "0.0") + "%</b><span>实际成功率</span>") +
+        kpi("<b>" + (s.n ? s.expectPct.toFixed(1) : "0.0") + "%</b><span>加权期望成功率</span>");
+      const showLv = s.levels.filter((x) => x.from >= 4);
+      const peak = showLv.slice().sort((a, b) => b.delta - a.delta)[0];
+      const low = showLv.slice().sort((a, b) => a.delta - b.delta)[0];
+      document.getElementById("barHint").textContent = !showLv.length
+        ? "这段没有 +4 及以上的记录。"
+        : "金色是实际，浅色底是期望。" +
+          (peak ? " " + peak.from + "-" + (peak.from + 1) + " 相对最欧。" : "") +
+          (low && low.from !== (peak && peak.from) ? " " + low.from + "-" + (low.from + 1) + " 相对最黑。" : "");
+      document.getElementById("lvBars").innerHTML = showLv.map((x) =>
+        '<div class="bar-row"><span>' + x.from + "-" + (x.from + 1) + '</span><div class="bar-track">' +
+        '<i class="bar-exp" style="width:' + x.expect + '%"></i>' +
+        '<i class="bar-act" style="width:' + x.actual + '%"></i></div>' +
+        '<span>' + x.actual.toFixed(1) + '% / ' + x.expect.toFixed(1) + '%</span></div>'
+      ).join("") || "<p class='sub'>没有可画的档位。</p>";
+      document.getElementById("lvTable").innerHTML = (showLv.length ? showLv : s.levels).map((x) => {
+        return "<tr><td>+" + x.from + " → +" + (x.from + 1) + "</td><td class='num'>" + x.n +
+          "</td><td class='num'>" + x.ok + "</td><td class='num'>" + (x.dest || "—") +
+          "</td><td class='num'>" + x.actual.toFixed(1) + "%</td><td class='num'>" +
+          x.expect.toFixed(1) + "%</td><td>" + tagOf(x.delta) + "</td></tr>";
+      }).join("") || "<tr><td colspan='7'>没有分档数据</td></tr>";
+      paintBreakdown(s);
+      return s;
+    }
+    function bucketTitle(item, multiYear) {
+      if (item.kind === "year") return item.y + "年";
+      if (item.kind === "month") return (multiYear ? item.y + "年" : "") + item.mo + "月";
+      return (multiYear ? item.y + "-" : "") + pad2(item.mo) + "-" + pad2(item.d);
+    }
+    function paintBreakdown(s) {
+      const multiYear = s.years.length > 1;
+      let items = s.days;
+      let mode = "day";
+      if (drill && drill.type === "month") {
+        items = s.days.filter((x) => x.y === drill.y && x.mo === drill.mo);
+        mode = "day";
+      } else if (drill && drill.type === "year") {
+        items = s.months.filter((x) => x.y === drill.y);
+        mode = items.length > 1 ? "month" : "day";
+        if (mode === "day") items = s.days.filter((x) => x.y === drill.y);
+      } else if (s.years.length > 1) {
+        items = s.years;
+        mode = "year";
+      } else if (s.days.length > 12) {
+        items = s.months;
+        mode = "month";
+      }
+      const hint = document.getElementById("breakHint");
+      if (mode === "year") hint.textContent = "已跨年，先按年看。点某一年再看月。";
+      else if (mode === "month") hint.textContent = "天数较多，先按月看。点某个月再看日。";
+      else hint.textContent = items.length > 12 ? "这一层按日展开。" : "金色数字是这一段的次数。";
+      const nav = ["<button type='button' data-up='all'>全部时间</button>"];
+      if (drill && drill.type === "year") nav.push(" / <button type='button' data-up='year'>" + drill.y + "年</button>");
+      if (drill && drill.type === "month") {
+        nav.push(" / <button type='button' data-up='year'>" + drill.y + "年</button>");
+        nav.push(" / <span>" + drill.mo + "月</span>");
+      }
+      document.getElementById("breakNav").innerHTML = drill ? nav.join("") : "";
+      document.getElementById("breakNav").onclick = function (ev) {
+        const b = ev.target.closest("button");
+        if (!b) return;
+        if (b.dataset.up === "all") drill = null;
+        if (b.dataset.up === "year") drill = { type: "year", y: drill.y };
+        yearFilter = "all";
+        monthFilter = "all";
+        day = "all";
+        paint();
+      };
+      document.getElementById("daygrid").innerHTML = items.map((x) =>
+        "<div class='day' data-kind='" + x.kind + "' data-id='" + x.id + "'><b>" + bucketTitle(x, multiYear) +
+        "</b><br>" + x.n + " 次 · 成功 " + x.ok + " · 碎 " + x.dest + " · 上11：" + x.to11 + "</div>"
+      ).join("") || "<div class='day'>—</div>";
+      document.getElementById("daygrid").onclick = function (ev) {
+        const box = ev.target.closest(".day");
+        if (!box || !box.dataset.kind) return;
+        const kind = box.dataset.kind;
+        const id = box.dataset.id;
+        if (kind === "year") {
+          drill = { type: "year", y: +id };
+          yearFilter = id;
+          monthFilter = "all";
+          day = "all";
+        } else if (kind === "month") {
+          const [y, m] = id.split("-");
+          drill = { type: "month", y: +y, mo: +m };
+          yearFilter = y;
+          monthFilter = id;
+          day = "all";
+        } else {
+          yearFilter = id.slice(0, 4);
+          monthFilter = id.slice(0, 7);
+          day = id;
+        }
+        paint();
+      };
+    }
+    function pills(box, items, cur, set) {
+      box.innerHTML = items.map(([id, label]) =>
+        "<button type='button' class='" + (cur === id ? "on" : "") + "' data-key='" + id + "'>" + label + "</button>"
+      ).join("");
+      box.onclick = (ev) => {
+        const b = ev.target.closest("button");
+        if (!b) return;
+        set(b.getAttribute("data-key"));
+      };
+    }
+    function applyCutoff(y, mo, d, h, mi, persist, presetId) {
+      if (![y, mo, d, h, mi].every((x) => Number.isFinite(x))) return;
+      afterKey = stampKey(y, mo, d, h, mi, 0);
+      preset = presetId || "";
+      fillCutoff(y, mo, d, h, mi);
+      yearFilter = "all";
+      monthFilter = "all";
+      day = "all";
+      drill = null;
+      if (persist !== false) {
+        try { localStorage.setItem(STORE, JSON.stringify({ y, mo, d, h, mi, preset })); } catch (e) {}
+      }
+      paint();
+    }
+    function clearCutoff() {
+      afterKey = null;
+      preset = "all";
+      try { localStorage.removeItem(STORE); } catch (e) {}
+      paint();
+    }
+    function applyRecent(days, id) {
+      const n = ROWS[0];
+      const end = n ? n.key : Date.UTC(defaultYear(), new Date().getMonth(), new Date().getDate(), 23, 59, 59);
+      const dt = new Date(end - days * 86400000);
+      applyCutoff(dt.getUTCFullYear(), dt.getUTCMonth() + 1, dt.getUTCDate(), 0, 0, true, id);
+      if (!n) sayImport("还没有流水。近" + days + "天已按今天往前套用，拖文件进来后会按最新一条重算。");
+    }
+    function paint() {
+      const rows = scoped();
+      paintStats(rows);
+      const years = uniqueYears(rows);
+      const monthKeys = Array.from(new Set(rows.map((r) => r.month))).sort().reverse();
+      const yearBox = document.getElementById("yearBtns");
+      const monthBox = document.getElementById("monthBtns");
+      if (years.length > 1) {
+        yearBox.style.display = "";
+        pills(yearBox,
+          [["all", "全部年份"]].concat(years.map((y) => [String(y), y + "年"])),
+          yearFilter, (v) => { yearFilter = v; monthFilter = "all"; day = "all"; paint(); });
+      } else {
+        yearBox.innerHTML = "";
+        yearBox.style.display = "none";
+        if (yearFilter !== "all" && years[0] && yearFilter !== String(years[0])) yearFilter = "all";
+      }
+      const months = yearFilter === "all" && years.length > 1
+        ? []
+        : monthKeys.filter((k) => yearFilter === "all" || k.startsWith(yearFilter + "-"));
+      if (months.length > 1 || (months.length === 1 && years.length > 1)) {
+        monthBox.style.display = "";
+        pills(monthBox,
+          [["all", "全部月份"]].concat(months.map((k) => {
+            const [y, m] = k.split("-");
+            return [k, (years.length > 1 ? y + "年" : "") + Number(m) + "月"];
+          })),
+          monthFilter, (v) => { monthFilter = v; day = "all"; paint(); });
+      } else {
+        monthBox.innerHTML = "";
+        monthBox.style.display = "none";
+      }
+      const dayKeys = rows
+        .filter((r) => (yearFilter === "all" || String(r.y) === yearFilter) && (monthFilter === "all" || r.month === monthFilter))
+        .map((r) => r.day);
+      const days = Array.from(new Set(dayKeys)).sort().reverse();
+      const showDays = monthFilter !== "all" || days.length <= 12;
+      if (showDays && days.length) {
+        pills(document.getElementById("dayBtns"),
+          [["all", "全部日期"]].concat(days.map((d) => [d, d.slice(5)])),
+          day, (v) => { day = v; paint(); });
+      } else {
+        document.getElementById("dayBtns").innerHTML = days.length
+          ? "<span class='sub' style='margin:0'>日期太多，先选上面的月份再筛某一天。</span>"
+          : "";
+      }
+      pills(document.getElementById("typeBtns"),
+        [["all","全部类型"],["gear","非武器"],["weapon","武器"]],
+        typeFilter, (v) => { typeFilter = v; paint(); });
+      pills(document.getElementById("kindBtns"),
+        [["all","全部结果"],["ok","成功"],["fail","失败"],["dest","破坏"],["11","打上 +11"]],
+        kind, (v) => { kind = v; paint(); });
+      const cutItems = [["all","全部"],["7d","近7天"],["30d","近30天"],["year","今年"]];
+      if (uniqueYears(ROWS).length > 1) {
+        uniqueYears(ROWS).forEach((y) => cutItems.push(["y" + y, y + "年起"]));
+      }
+      pills(document.getElementById("cutPresets"),
+        cutItems,
+        afterKey == null ? "all" : preset,
+        (v) => {
+          if (v === "all") { clearCutoff(); return; }
+          if (v === "7d") { applyRecent(7, "7d"); return; }
+          if (v === "30d") { applyRecent(30, "30d"); return; }
+          if (v === "year") {
+            const y = ROWS[0] ? ROWS[0].y : defaultYear();
+            applyCutoff(y, 1, 1, 0, 0, true, "year");
+            return;
+          }
+          if (v.charAt(0) === "y") {
+            applyCutoff(+v.slice(1), 1, 1, 0, 0, true, v);
+          }
+        });
+      const shown = rows.filter((r) => {
+        if (yearFilter !== "all" && String(r.y) !== yearFilter) return false;
+        if (monthFilter !== "all" && r.month !== monthFilter) return false;
+        if (day !== "all" && r.day !== day) return false;
+        if (typeFilter === "weapon" && !r.weapon) return false;
+        if (typeFilter === "gear" && r.weapon) return false;
+        if (kind === "ok" && !r.ok) return false;
+        if (kind === "fail" && r.ok) return false;
+        if (kind === "dest" && !r.destroy) return false;
+        if (kind === "11" && !r.to11) return false;
+        return true;
+      });
+      document.getElementById("countLine").textContent =
+        (afterKey == null ? "当前 " : "节点后 ") + shown.length + " 条" +
+        (shown.length !== rows.length ? "（统计 " + rows.length + " 条）" : "");
+      document.getElementById("rows").innerHTML = shown.map((r) => {
+        const cls = r.destroy ? "dead" : r.ok ? "ok" : "fail";
+        const res = r.destroy ? "破坏" : r.ok ? "成功" : "失败";
+        return "<tr class='" + cls + "'><td>" + showStamp(r.t) + "</td><td>" + r.type + "</td><td>" + r.chg + "</td><td>" +
+          (r.charm ? "使用" : "未使用") + "</td><td class='num'>" + fmt(r.crystal) + "</td><td>" + res + "</td></tr>";
+      }).join("");
+    }
+
+    function sayImport(msg) {
+      const el = document.getElementById("importMsg");
+      if (el) el.textContent = msg;
+    }
+    function decodeHtml(s) {
+      return String(s || "")
+        .replace(/&nbsp;/g, " ")
+        .replace(/&gt;/g, ">")
+        .replace(/&lt;/g, "<")
+        .replace(/&amp;/g, "&")
+        .replace(/&quot;/g, "\"");
+    }
+    function parseHelperHtml(html) {
+      const cols = [...html.matchAll(/tool-list-column[^>]*>([^<]*)</g)].map((m) => decodeHtml(m[1]).trim());
+      const rows = [];
+      for (let i = 0; i + 4 < cols.length; i += 5) {
+        const [t, name, chg, charm, res] = cols.slice(i, i + 5);
+        if (!parseStamp(t) || !normalizeChg(chg)) continue;
+        rows.push(normalizeRaw([t, chg, charm, res, name]));
+      }
+      return rows.filter(Boolean);
+    }
+    function parseTableHtml(html) {
+      const rows = [];
+      const re = /<tr[^>]*>([\s\S]*?)<\/tr>/gi;
+      let m;
+      while ((m = re.exec(html))) {
+        const cells = [...m[1].matchAll(/<t[dh][^>]*>([\s\S]*?)<\/t[dh]>/gi)].map((c) =>
+          decodeHtml(c[1].replace(/<[^>]+>/g, " ")).replace(/\s+/g, " ").trim()
+        );
+        if (cells.length < 2) continue;
+        const t = cells.find((x) => parseStamp(x));
+        const chg = cells.find((x) => normalizeChg(x));
+        if (!t || !chg) continue;
+        const name = cells.find((x) => /武器/.test(x)) || "";
+        const charm = cells.find((x) => /使用/.test(x)) || "";
+        const res = cells.find((x) => /成功|失败|破坏/.test(x)) || "";
+        rows.push(normalizeRaw([t, chg, charm, res, name]));
+      }
+      return rows.filter(Boolean);
+    }
+    function extractRawLiteral(text) {
+      const i = text.indexOf("const RAW = [");
+      if (i < 0) return null;
+      const start = text.indexOf("[", i);
+      let depth = 0;
+      for (let j = start; j < text.length; j++) {
+        const ch = text[j];
+        if (ch === "[") depth += 1;
+        else if (ch === "]") {
+          depth -= 1;
+          if (depth === 0) {
+            try { return eval(text.slice(start, j + 1)); } catch (e) { return null; }
+          }
+        }
+      }
+      return null;
+    }
+    function parseChunks(text) {
+      const src = String(text || "").replace(/\r/g, "\n");
+      const re = /(\d{4}[-/年.]\d{1,2}[-/月.]\d{1,2}日?\s+\d{1,2}:\d{1,2}(?::\d{1,2})?|\d{1,2}-\d{1,2}\s+\d{1,2}:\d{1,2}(?::\d{1,2})?)/g;
+      const hits = [...src.matchAll(re)];
+      const rows = [];
+      hits.forEach((hit, i) => {
+        const chunk = src.slice(hit.index + hit[0].length, i + 1 < hits.length ? hits[i + 1].index : src.length);
+        const chgM = String(chunk).replace(/[—－–~～]/g, "-").replace(/->|＞|>/g, "→")
+          .match(/(\d{1,2})\s*→\s*(\d{1,2}|损坏|破坏|損坏)/);
+        if (!chgM) return;
+        const dest = /损|破/.test(chgM[2]);
+        const chg = dest ? chgM[1] + "→损坏" : chgM[1] + "→" + chgM[2];
+        rows.push(normalizeRaw([hit[1], chg, chunk, chunk, chunk]));
+      });
+      return rows.filter(Boolean);
+    }
+    function parseAnyText(text) {
+      if (!text) return [];
+      const helper = parseHelperHtml(text);
+      if (helper.length) return helper;
+      const raw = extractRawLiteral(text);
+      if (raw && raw.length) return raw.map(normalizeRaw).filter(Boolean);
+      const table = parseTableHtml(text);
+      if (table.length) return table;
+      return parseChunks(text);
+    }
+    function parseJsonText(text) {
+      try {
+        const data = JSON.parse(text);
+        const list = Array.isArray(data) ? data : (data.rows || data.RAW || data.data || []);
+        return (list || []).map(normalizeRaw).filter(Boolean);
+      } catch (e) {
+        return parseAnyText(text);
+      }
+    }
+    async function readAsText(file) {
+      const buf = await file.arrayBuffer();
+      const u8 = new Uint8Array(buf);
+      if (u8[0] === 0xFF && u8[1] === 0xFE) return new TextDecoder("utf-16le").decode(buf);
+      if (u8[0] === 0xFE && u8[1] === 0xFF) return new TextDecoder("utf-16be").decode(buf);
+      if (u8[0] === 0xEF && u8[1] === 0xBB && u8[2] === 0xBF) return new TextDecoder("utf-8").decode(buf.slice(3));
+      return new TextDecoder("utf-8").decode(buf);
+    }
+    function loadScript(src) {
+      return new Promise((resolve, reject) => {
+        const s = document.createElement("script");
+        s.src = src;
+        s.onload = () => resolve();
+        s.onerror = () => reject(new Error("脚本加载失败 " + src));
+        document.head.appendChild(s);
+      });
+    }
+    async function parseSheetFile(file) {
+      if (!window.XLSX) {
+        await loadScript("https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js");
+      }
+      const buf = await file.arrayBuffer();
+      const wb = window.XLSX.read(buf, { type: "array" });
+      const sheet = wb.Sheets[wb.SheetNames[0]];
+      const rows = window.XLSX.utils.sheet_to_json(sheet, { header: 1, raw: false });
+      const text = rows.map((r) => (r || []).join("\t")).join("\n");
+      return parseAnyText(text);
+    }
+    async function parseFile(file) {
+      const name = (file.name || "").toLowerCase();
+      const type = file.type || "";
+      if (type.startsWith("image/") || /\.(png|jpe?g|webp|bmp|gif)$/.test(name)) {
+        throw new Error("截图不导入，请用游戏知几网页或表格");
+      }
+      if (/\.(xlsx|xls)$/.test(name)) return parseSheetFile(file);
+      const text = await readAsText(file);
+      if (/\.json$/.test(name) || type.includes("json")) return parseJsonText(text);
+      return parseAnyText(text);
+    }
+    function addIncoming(incoming) {
+      const seen = new Set(mergeRaw(RAW, extras).map(fp));
+      let added = 0, dup = 0, bad = 0;
+      incoming.forEach((row) => {
+        const n = normalizeRaw(row);
+        if (!n) { bad += 1; return; }
+        const k = fp(n);
+        if (seen.has(k)) { dup += 1; return; }
+        seen.add(k);
+        extras.push(n);
+        added += 1;
+      });
+      if (added) saveExtras();
+      rebuild();
+      if (!document.getElementById("cutM").value && first) fillCutoff(first.y, first.mo, first.d, first.h, first.mi);
+      paint();
+      return { added, dup, bad };
+    }
+    async function handleFiles(fileList) {
+      const files = [...fileList];
+      if (!files.length) return;
+      let added = 0, dup = 0, empty = 0;
+      const names = [];
+      for (const file of files) {
+        sayImport("正在读取 " + file.name + " …");
+        try {
+          const rows = await parseFile(file);
+          if (!rows.length) { empty += 1; names.push(file.name + "（没认出流水）"); continue; }
+          const r = addIncoming(rows);
+          added += r.added;
+          dup += r.dup;
+          names.push(file.name + "（+" + r.added + (r.dup ? "，重复 " + r.dup : "") + "）");
+        } catch (err) {
+          empty += 1;
+          names.push(file.name + "（失败）");
+        }
+      }
+      sayImport("追加 " + added + " 条" + (dup ? "，跳过重复 " + dup + " 条" : "") +
+        (empty ? "，有 " + empty + " 个文件没认出" : "") + "。 " + names.join("；") +
+        "。现在一共 " + ROWS.length + " 条。");
+    }
+
+    fillCutoff(first.y, first.mo, first.d, first.h, first.mi);
+    document.getElementById("btnCutApply").onclick = function () {
+      const c = readCutoff();
+      if (![c.y, c.mo, c.d, c.h, c.mi].every((x) => Number.isFinite(x))) return;
+      applyCutoff(c.y, c.mo, c.d, c.h, c.mi, true, "");
+    };
+    document.getElementById("btnCutClear").onclick = clearCutoff;
+    ["cutY", "cutM", "cutD", "cutH", "cutMin"].forEach((id) => {
+      document.getElementById(id).addEventListener("keydown", (ev) => {
+        if (ev.key === "Enter") document.getElementById("btnCutApply").click();
+      });
+    });
+    document.getElementById("btnPick").onclick = function () {
+      document.getElementById("filePick").click();
+    };
+    document.getElementById("filePick").onchange = function (ev) {
+      handleFiles(ev.target.files);
+      ev.target.value = "";
+    };
+    document.getElementById("btnClearExtra").onclick = function () {
+      extras = [];
+      saveExtras();
+      rebuild();
+      paint();
+      sayImport("已清空，现在 0 条。");
+    };
+    let dragDepth = 0;
+    window.addEventListener("dragenter", (ev) => {
+      ev.preventDefault();
+      dragDepth += 1;
+      document.body.classList.add("is-drag");
+    });
+    window.addEventListener("dragover", (ev) => ev.preventDefault());
+    window.addEventListener("dragleave", (ev) => {
+      ev.preventDefault();
+      dragDepth = Math.max(0, dragDepth - 1);
+      if (!dragDepth) document.body.classList.remove("is-drag");
+    });
+    window.addEventListener("drop", (ev) => {
+      ev.preventDefault();
+      dragDepth = 0;
+      document.body.classList.remove("is-drag");
+      handleFiles(ev.dataTransfer.files);
+    });
+    try {
+      const saved = JSON.parse(localStorage.getItem(STORE) || "null");
+      if (saved && [saved.mo, saved.d, saved.h, saved.mi].every((x) => Number.isFinite(x))) {
+        applyCutoff(saved.y || 2026, saved.mo, saved.d, saved.h, saved.mi, false, saved.preset || "");
+      } else {
+        paint();
+      }
+    } catch (e) {
+      paint();
+    }
+    if (extras.length) {
+      sayImport("已载入上次追加的 " + extras.length + " 条，当前一共 " + ROWS.length + " 条。");
+    }
+  </script>
+</body>
+</html>

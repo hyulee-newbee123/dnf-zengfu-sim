@@ -3,6 +3,10 @@ DNF 手游 · 增幅机 v2.3 · 使用方法
 在线地址：
 https://hyulee-newbee123.github.io/dnf-zengfu-sim/
 
+增幅流水分析：
+https://hyulee-newbee123.github.io/dnf-zengfu-sim/log.html
+本机也可打开 log.html，或从模拟器底部进入。把游戏知几导出的网页拖进去即可统计。
+
 本机使用：
 1. 双击「打开模拟器.bat」，或用 Chrome / Edge 打开 index.html
 2. 点一下页面后才会出声

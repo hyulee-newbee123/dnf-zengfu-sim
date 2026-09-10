@@ -7,6 +7,9 @@
 
 https://hyulee-newbee123.github.io/dnf-zengfu-sim/
 
+增幅流水分析（单独页，可拖入游戏知几导出的网页）：  
+https://hyulee-newbee123.github.io/dnf-zengfu-sim/log.html
+
 手机或电脑浏览器打开即可。点一下页面后才会出声。
 
 若 GitHub Pages 打不开，可换网络，或下载本仓库后双击 `打开模拟器.bat`。
