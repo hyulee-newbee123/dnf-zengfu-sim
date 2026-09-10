@@ -54,7 +54,7 @@
       <div class="eyebrow">地下城与勇士手游 · 模拟器</div>
       <div class="hero-title">
         <h1>增幅机</h1>
-        <span class="ver">v2.2</span>
+        <span class="ver">v2.3</span>
       </div>
       <p>成功 / 降级 / 破坏 · 纯属娱乐</p>
     </header>
@@ -220,20 +220,11 @@
 
     <section id="panel-calc" class="panel">
       <h2>期望消耗演算</h2>
-      <p class="hint">按你填的类型、件数、起始和目标来算。破坏后新胚子从 0 重来；置换后胚子回到起始等级，下一件接着打。开了幸运符时，低于设定等级不会消耗。中位数比平均数更接近普通人的花费。泰拉和合成器按行情折算；人民币按 50 点券和充值档估算。</p>
+      <p class="hint">手头胚子从起始等级往上打；身上低于目标的部位才算。置换后胚子变成该部位原来的等级，下一件接着打。破坏后新胚子从 0 重来。身上增幅和置换页是同一份。</p>
       <div class="preset-grid" id="mcPresets"></div>
       <div class="form-grid">
-        <label>胚子类型
-          <select id="mcType">
-            <option value="weapon">武器</option>
-            <option value="gear">非武器</option>
-          </select>
-        </label>
-        <label>演算几件
-          <input type="number" id="mcCount" min="1" max="12" value="1" />
-        </label>
-        <label>起始等级
-          <input type="number" id="mcStart" min="0" max="19" value="0" />
+        <label>胚子起始
+          <input type="number" id="mcEmbryo" min="0" max="19" value="0" />
         </label>
         <label>目标等级
           <input type="number" id="mcTarget" min="1" max="20" value="10" />
@@ -244,6 +235,19 @@
         <label id="mcCharmFromWrap" hidden>几级前不用符
           <input type="number" id="mcCharmFrom" min="0" max="20" value="4" />
         </label>
+      </div>
+      <div class="mc-gear">
+        <div class="mc-gear-head">
+          <h3>身上增幅</h3>
+          <div class="mc-fill">
+            <label>全部设为
+              <input type="number" id="mcFillLv" min="0" max="20" value="10" inputmode="numeric" />
+            </label>
+            <button type="button" class="btn" id="btnMcFill">套用</button>
+          </div>
+        </div>
+        <div class="mc-gear-grid" id="mcGearGrid"></div>
+        <p class="mc-need" id="mcNeed"></p>
       </div>
       <div class="btn-row">
         <button type="button" class="btn" id="btnMcCharm">演算用幸运符 · 关</button>

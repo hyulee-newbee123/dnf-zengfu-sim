@@ -185,10 +185,10 @@ window.DNFConfig = {
     minRuns: 200,
     maxRuns: 20000,
     presets: [
-      { start: 0, target: 4, label: "0 → 4 · 平民必成线" },
-      { start: 0, target: 7, label: "0 → 7 · 红七公", gold: true },
-      { start: 0, target: 10, label: "0 → 10 · 破坏门槛前" },
-      { start: 0, target: 12, label: "0 → 12 · 会碎胚子" },
+      { embryo: 0, gear: 0, target: 7, label: "身上 0 → 7" },
+      { embryo: 0, gear: 0, target: 10, label: "身上 0 → 10" },
+      { embryo: 0, gear: 10, target: 11, label: "红10 → 11", gold: true },
+      { embryo: 0, gear: 10, target: 12, label: "红10 → 12" },
     ],
   },
 

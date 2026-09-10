@@ -1102,6 +1102,92 @@ button.btn.gold.btn-amp:hover {
   gap: 8px;
   margin-bottom: 14px;
 }
+.mc-gear {
+  margin: 4px 0 14px;
+}
+.mc-gear-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+  flex-wrap: wrap;
+}
+.mc-gear-head h3 {
+  font-family: var(--display);
+  font-size: 16px;
+  font-weight: 400;
+  letter-spacing: 0.14em;
+  color: var(--gold);
+  margin: 0;
+}
+.mc-fill {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+}
+.mc-fill label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--ink-dim);
+}
+.mc-fill input {
+  width: 4.2em;
+  min-height: 36px;
+  background: #14261a;
+  border: 1px solid var(--line);
+  color: var(--ink);
+  padding: 6px 8px;
+  font: inherit;
+}
+.mc-gear-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+}
+.mc-slot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  border: 1px solid var(--line);
+  background: #14261a;
+  padding: 8px 8px 8px 10px;
+  min-width: 0;
+}
+.mc-slot span:first-child {
+  font-size: 12px;
+  color: var(--ink-dim);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mc-slot .num {
+  display: flex;
+  align-items: center;
+  color: var(--amp);
+  font-family: var(--display);
+  font-size: 18px;
+}
+.mc-slot input {
+  width: 2.6em;
+  min-width: 0;
+  background: #0e1c12;
+  border: 1px solid var(--line);
+  color: var(--amp);
+  font: inherit;
+  font-size: 18px;
+  padding: 2px 4px;
+}
+.mc-need {
+  margin: 8px 0 0;
+  font-size: 12px;
+  color: var(--gold);
+  letter-spacing: 0.04em;
+  line-height: 1.55;
+}
 .metric {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -1668,6 +1754,7 @@ footer.note a:hover { border-bottom: 1px solid var(--gold); }
   }
   .slots { grid-template-columns: repeat(2, 1fr); }
   .preset-grid, .metric, .form-grid, .auto-grid { grid-template-columns: 1fr 1fr; }
+  .mc-gear-grid { grid-template-columns: repeat(2, 1fr); }
   .recharge-grid, .goods-grid { grid-template-columns: repeat(2, 1fr); }
   button.btn.gold.btn-amp { width: 100%; max-width: 280px; }
   .amp-result-title { font-size: 30px; letter-spacing: 0.16em; text-indent: 0.16em; }

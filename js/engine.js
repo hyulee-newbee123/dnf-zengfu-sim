@@ -265,16 +265,130 @@
     return ev.crystal * prices.crystal + ev.charm * prices.charm;
   }
 
+  function embryoStartOf(opts) {
+    if (opts && opts.embryoStart != null && Number.isFinite(Number(opts.embryoStart))) {
+      return Math.max(0, Number(opts.embryoStart));
+    }
+    return Math.max(0, Number(opts && opts.start) || 0);
+  }
+
+  function normalizeSlots(opts) {
+    if (opts && Array.isArray(opts.slots)) {
+      return opts.slots.map((s, i) => ({
+        id: (s && s.id) || ("p" + i),
+        weapon: !!(s && s.weapon),
+        gear: clamp(Number(s && s.gear) || 0, 0, D.MAX_LEVEL),
+      }));
+    }
+    const start = Math.max(0, Number(opts && opts.start) || 0);
+    const count = Math.max(1, Number(opts && opts.count) || 1);
+    const isWeapon = !!(opts && opts.isWeapon);
+    const out = [];
+    for (let i = 0; i < count; i++) {
+      out.push({ id: "p" + i, weapon: isWeapon, gear: start });
+    }
+    return out;
+  }
+
+  function slotsBelow(slots, target) {
+    return slots.filter((s) => s.gear < target);
+  }
+
   /**
-   * 按件数、类型、起始→目标比较开符档。
-   * 置换成功后胚子变回 start，下一件从 start 接着打；
+   * 手头胚子从 embryoStart 打到 target；
+   * 置换后胚子变成该部位原来的等级，下一件从那个等级接着打；
    * 破坏后新胚子从 0 重来。
    */
-  function adviseSet(opts) {
-    const start = Math.max(0, Number(opts.start) || 0);
+  function simulateSetToTarget(opts) {
     const target = opts.target;
-    const isWeapon = !!opts.isWeapon;
-    const count = Math.max(1, Number(opts.count) || 1);
+    const embryoStart = embryoStartOf(opts);
+    const needed = slotsBelow(normalizeSlots(opts), target);
+    if (!needed.length) return emptySim(embryoStart, target);
+    let leftover = embryoStart;
+    let first = true;
+    const tot = {
+      reached: true,
+      aborted: false,
+      finalLevel: target,
+      peak: embryoStart,
+      attempts: 0,
+      success: 0,
+      downgrade: 0,
+      destroy: 0,
+      embryoUsed: 0,
+      crystal: 0,
+      gold: 0,
+      charm: 0,
+      start: embryoStart,
+      target,
+    };
+    for (let i = 0; i < needed.length; i++) {
+      const slot = needed[i];
+      const start = first ? embryoStart : leftover;
+      first = false;
+      if (start >= target) {
+        leftover = slot.gear;
+        continue;
+      }
+      const s = simulateToTarget({
+        start,
+        target,
+        isWeapon: slot.weapon,
+        useCharm: opts.useCharm,
+        charmFrom: opts.charmFrom,
+        maxEmbryo: opts.maxEmbryo,
+        rng: opts.rng,
+      });
+      tot.crystal += s.crystal;
+      tot.gold += s.gold;
+      tot.charm += s.charm;
+      tot.attempts += s.attempts;
+      tot.success += s.success;
+      tot.downgrade += s.downgrade;
+      tot.destroy += s.destroy;
+      tot.embryoUsed += tot.embryoUsed === 0 ? s.embryoUsed : Math.max(0, s.embryoUsed - 1);
+      tot.reached = tot.reached && s.reached;
+      tot.aborted = tot.aborted || s.aborted;
+      if (s.peak > tot.peak) tot.peak = s.peak;
+      tot.finalLevel = s.finalLevel;
+      leftover = slot.gear;
+      if (s.aborted) break;
+    }
+    return tot;
+  }
+
+  function expectedChain(embryoStart, target, slots, useCharm, charmFrom) {
+    let start = embryoStart;
+    let crystal = 0;
+    let charm = 0;
+    let gold = 0;
+    const needed = slotsBelow(slots, target);
+    for (let i = 0; i < needed.length; i++) {
+      const slot = needed[i];
+      if (start < target) {
+        const ev = expectedToTarget({
+          start, target, isWeapon: slot.weapon, useCharm, charmFrom,
+        });
+        crystal += ev.crystal || 0;
+        charm += ev.charm || 0;
+        gold += ev.gold || 0;
+      }
+      start = slot.gear;
+    }
+    return { crystal, charm, gold };
+  }
+
+  /**
+   * 按身上各部位和手头胚子比较开符档。
+   * 没有 slots 时，退回旧接口：count 件同类型，身上和胚子都是 start。
+   */
+  function adviseSet(opts) {
+    const embryoStart = embryoStartOf(opts);
+    const target = opts.target;
+    const slots = normalizeSlots(opts);
+    const needed = slotsBelow(slots, target);
+    const isWeapon = needed.length ? needed.every((s) => s.weapon) : !!opts.isWeapon;
+    const count = needed.length;
     const prices = {
       crystal: opts.crystalTera,
       charm: opts.charmTera,
@@ -290,14 +404,12 @@
     }
 
     const rows = plans.map((p) => {
-      const piece = expectedToTarget({
-        start, target, isWeapon, useCharm: p.useCharm, charmFrom: p.charmFrom,
-      });
+      const piece = expectedChain(embryoStart, target, slots, p.useCharm, p.charmFrom);
       return {
         useCharm: p.useCharm,
         charmFrom: p.charmFrom,
         kind: p.kind,
-        tera: pieceTera(piece, prices) * count,
+        tera: pieceTera(piece, prices),
         piece,
       };
     });
@@ -308,12 +420,15 @@
     }
     const allCharm = rows.find((r) => r.useCharm && r.charmFrom === charmMin) || null;
     const noCharm = rows.find((r) => !r.useCharm) || rows[0];
-    const mustCharm = best.kind === "from" && start >= best.charmFrom;
+    const mustCharm = best.kind === "from" && embryoStart >= best.charmFrom;
     return {
-      start,
+      start: embryoStart,
+      embryoStart,
       target,
       isWeapon,
       count,
+      slots,
+      needed,
       prices,
       charmMin,
       best,
@@ -386,10 +501,14 @@
     };
   }
 
+  function runSim(opts) {
+    return Array.isArray(opts.slots) ? simulateSetToTarget(opts) : simulateToTarget(opts);
+  }
+
   function monteCarlo(opts) {
     const n = opts.runs || (global.DNFConfig && global.DNFConfig.monteCarlo.defaultRuns) || 2000;
     const samples = new Array(n);
-    for (let i = 0; i < n; i++) samples[i] = simulateToTarget(opts);
+    for (let i = 0; i < n; i++) samples[i] = runSim(opts);
     return summarizeMonteCarlo(samples);
   }
 
@@ -401,7 +520,7 @@
       function step() {
         const t0 = typeof performance !== "undefined" ? performance.now() : Date.now();
         while (i < n) {
-          samples[i] = simulateToTarget(opts);
+          samples[i] = runSim(opts);
           i += 1;
           const now = typeof performance !== "undefined" ? performance.now() : Date.now();
           if (now - t0 >= 8) break;
@@ -424,6 +543,7 @@
     canAfford,
     pay,
     simulateToTarget,
+    simulateSetToTarget,
     expectedToTarget,
     adviseSet,
     monteCarlo,

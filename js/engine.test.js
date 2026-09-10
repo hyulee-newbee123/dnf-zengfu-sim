@@ -116,6 +116,43 @@ const fromSeven = E.adviseSet({
 assert(fromSeven.start === 7, "advice uses filled start");
 assert(fromSeven.best.tera < advice.best.tera, "7→10 cheaper than 0→10");
 
+const red10 = E.adviseSet({
+  embryoStart: 0,
+  target: 11,
+  slots: [
+    { weapon: true, gear: 10 },
+    { weapon: false, gear: 10 },
+  ],
+  crystalTera: 200,
+  charmTera: 11000,
+});
+const fromScratch = E.adviseSet({
+  embryoStart: 0,
+  target: 11,
+  slots: [
+    { weapon: true, gear: 0 },
+    { weapon: false, gear: 0 },
+  ],
+  crystalTera: 200,
+  charmTera: 11000,
+});
+assert(red10.count === 2 && fromScratch.count === 2, "both plans need 2 slots");
+assert(red10.best.tera < fromScratch.best.tera, "红10上11 cheaper than 身上0上11");
+
+const alwaysOkSet = () => 0.001;
+const setSim = E.simulateSetToTarget({
+  embryoStart: 0,
+  target: 11,
+  slots: [
+    { weapon: true, gear: 10 },
+    { weapon: false, gear: 10 },
+  ],
+  useCharm: false,
+  rng: alwaysOkSet,
+});
+assert(setSim.reached && setSim.embryoUsed === 1, "reuse leftover embryo after swap");
+assert(setSim.attempts === 12, "0→11 then 10→11 is 12 successes");
+
 const skipCharm = E.simulateToTarget({
   start: 0, target: 5, useCharm: true, charmFrom: 5, rng: alwaysOk,
 });

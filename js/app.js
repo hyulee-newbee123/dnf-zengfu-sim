@@ -1347,21 +1347,79 @@
     }
   }
 
-  function runMonteCarlo() {
-    if (mcBusy) return;
-    const isWeapon = byId("mcType").value === "weapon";
-    const start = clampNum(byId("mcStart").value, 0, D.MAX_LEVEL - 1);
-    const target = clampNum(byId("mcTarget").value, 1, D.MAX_LEVEL);
-    const count = clampNum(byId("mcCount").value, 1, C.monteCarlo.maxCount || 12);
-    const runs = clampNum(byId("mcRuns").value, C.monteCarlo.minRuns, C.monteCarlo.maxRuns);
-    const charmFrom = state.mcCharm ? clampNum(byId("mcCharmFrom").value, 0, D.MAX_LEVEL) : 0;
-    if (target <= start) {
-      toast("目标必须高于起始等级", "deny");
+  function mcSlots() {
+    return D.SLOTS.map((s) => ({
+      id: s.id,
+      name: s.name,
+      weapon: !!s.weapon,
+      gear: state.gear[s.id] || 0,
+    }));
+  }
+
+  function mcNeedList(target) {
+    return mcSlots().filter((s) => s.gear < target);
+  }
+
+  function updateMcNeed() {
+    const el = byId("mcNeed");
+    if (!el) return;
+    const embryo = clampNum(byId("mcEmbryo") && byId("mcEmbryo").value, 0, D.MAX_LEVEL);
+    const target = clampNum(byId("mcTarget") && byId("mcTarget").value, 1, D.MAX_LEVEL);
+    const need = mcNeedList(target);
+    if (!need.length) {
+      el.textContent = "身上都已达到 +" + target + "，没有要演算的部位。";
       return;
     }
-    byId("mcStart").value = start;
+    const w = need.filter((s) => s.weapon).length;
+    const g = need.length - w;
+    const kind = (w ? w + " 武器" : "") + (w && g ? " / " : "") + (g ? g + " 非武器" : "");
+    el.textContent = "要打 " + need.length + " 个部位（" + kind + "）。手头胚子 +" + embryo +
+      " → +" + target + "，置换后用卸下的等级接着打。";
+  }
+
+  function setAllGear(lv) {
+    const n = clampNum(lv, 0, D.MAX_LEVEL);
+    D.SLOTS.forEach((s) => { state.gear[s.id] = n; });
+    save();
+    renderSlots();
+    renderMcGear();
+  }
+
+  function renderMcGear() {
+    const box = byId("mcGearGrid");
+    if (!box) return;
+    box.innerHTML = D.SLOTS.map((s) => {
+      const lv = state.gear[s.id] || 0;
+      return '<label class="mc-slot"><span>' + s.name + "</span>" +
+        '<span class="num">+<input type="number" min="0" max="' + D.MAX_LEVEL +
+        '" value="' + lv + '" data-gear-lv="' + s.id + '" inputmode="numeric" /></span></label>';
+    }).join("");
+    updateMcNeed();
+  }
+
+  function applyGearLv(id, raw) {
+    const lv = clampNum(raw, 0, D.MAX_LEVEL);
+    state.gear[id] = lv;
+    $$('[data-gear-lv="' + id + '"]').forEach((el) => { el.value = lv; });
+    save();
+    updateMcNeed();
+  }
+
+  function runMonteCarlo() {
+    if (mcBusy) return;
+    const embryoStart = clampNum(byId("mcEmbryo").value, 0, D.MAX_LEVEL);
+    const target = clampNum(byId("mcTarget").value, 1, D.MAX_LEVEL);
+    const runs = clampNum(byId("mcRuns").value, C.monteCarlo.minRuns, C.monteCarlo.maxRuns);
+    const charmFrom = state.mcCharm ? clampNum(byId("mcCharmFrom").value, 0, D.MAX_LEVEL) : 0;
+    const slots = mcSlots();
+    const need = slots.filter((s) => s.gear < target);
+    byId("mcEmbryo").value = embryoStart;
     byId("mcTarget").value = target;
-    byId("mcCount").value = count;
+    if (!need.length) {
+      toast("身上都已达到目标，没有要演算的部位", "deny");
+      return;
+    }
+    updateMcNeed();
     byId("mcOut").innerHTML = "<p class='hint'>计算中… 0%</p>";
     const adviceBox = byId("mcAdvice");
     adviceBox.hidden = true;
@@ -1370,19 +1428,19 @@
     setMcBusy(true);
 
     const paint = (r) => {
-      lastMcPaint = { r, start, target, isWeapon, count };
+      lastMcPaint = { r, embryoStart, target, slots, count: need.length };
       paintMcOut();
-      renderMcAdvice(start, target, isWeapon, count);
+      renderMcAdvice(embryoStart, target, slots, need.length);
     };
 
     const work = E.monteCarloAsync
       ? E.monteCarloAsync({
-        start, target, isWeapon, useCharm: state.mcCharm, charmFrom, runs,
+        embryoStart, target, slots, useCharm: state.mcCharm, charmFrom, runs,
       }, (p) => {
         byId("mcOut").innerHTML = "<p class='hint'>计算中… " + Math.round(p * 100) + "%</p>";
       })
       : Promise.resolve(E.monteCarlo({
-        start, target, isWeapon, useCharm: state.mcCharm, charmFrom, runs,
+        embryoStart, target, slots, useCharm: state.mcCharm, charmFrom, runs,
       }));
 
     Promise.resolve(work).then(paint).catch((err) => {
@@ -1408,31 +1466,31 @@
     if (!lastMcPaint) return;
     const { r, count } = lastMcPaint;
     const n = count;
-    const piece = n > 1 ? n + "件" : "";
-    const many = n > 1 ? "按 " + n + " 件合计。" : "";
-    const teraMean = teraOf(r.crystal.mean * n, r.charm.mean * n);
-    const teraP50 = teraOf(r.crystal.p50 * n, r.charm.p50 * n);
+    const piece = n > 1 ? n + "部位" : "";
+    const many = n > 1 ? "按身上 " + n + " 个低于目标的部位合计，置换后接着打。" : "";
+    const teraMean = teraOf(r.crystal.mean, r.charm.mean);
+    const teraP50 = teraOf(r.crystal.p50, r.charm.p50);
     const synthMean = synthOf(teraMean);
     const rmbMean = rmbOfSynth(synthMean);
     const rows = [
       ["达成率", (r.reachRate * 100).toFixed(1) + "%", "这么多次独立模拟里，最终打到目标等级的比例。会一直打到目标，所以一般是 100%。"],
-      [piece + "矛盾中位数", fmt(r.crystal.p50 * n), "一半的模拟消耗的矛盾不超过这个数，比平均数更接近普通人的花费。" + many],
-      [piece + "矛盾期望", fmt(r.crystal.mean * n), "所有模拟消耗矛盾的平均值。极欧或极非会把这个数拉高或拉低。" + many],
-      [piece + "矛盾 P90", fmt(r.crystal.p90 * n), "90% 的模拟消耗不超过这个数。剩下 10% 更倒霉，用来看最坏情况要准备多少。" + many],
-      [piece + "幸运符中位数", fmt(r.charm.p50 * n), "一半的模拟用掉的幸运符不超过这个数。没开符或该档不用符时是 0。" + many],
-      [piece + "幸运符期望", fmt(r.charm.mean * n), "所有模拟消耗幸运符的平均值。" + many],
+      [piece + "矛盾中位数", fmt(r.crystal.p50), "一半的模拟消耗的矛盾不超过这个数，比平均数更接近普通人的花费。" + many],
+      [piece + "矛盾期望", fmt(r.crystal.mean), "所有模拟消耗矛盾的平均值。极欧或极非会把这个数拉高或拉低。" + many],
+      [piece + "矛盾 P90", fmt(r.crystal.p90), "90% 的模拟消耗不超过这个数。剩下 10% 更倒霉，用来看最坏情况要准备多少。" + many],
+      [piece + "幸运符中位数", fmt(r.charm.p50), "一半的模拟用掉的幸运符不超过这个数。没开符或该档不用符时是 0。" + many],
+      [piece + "幸运符期望", fmt(r.charm.mean), "所有模拟消耗幸运符的平均值。" + many],
       [piece + "期望泰拉", fmtTera(teraMean), "按你填的矛盾、幸运符单价，把期望消耗折成泰拉。" + many],
       [piece + "中位数泰拉", fmtTera(teraP50), "按中位数矛盾和幸运符折成泰拉，更接近普通人的花费。" + many],
       [piece + "约等于装扮合成器", fmtSynth(synthMean), "期望泰拉 ÷ 到手泰拉（标价打 9 折），四舍五入取整。单价填 0 时不折算。" + many],
       [piece + "期望 RMB", fmtRmb(rmbMean), "合成器个数 ×（50 点券按充值档折成的人民币）。合成器泰拉填 0 时不折算。" + many],
-      [piece + "最少矛盾", fmt(r.crystal.min * n), "这些次模拟里，消耗矛盾最少的那一次。" + many],
-      [piece + "最多矛盾", fmt(r.crystal.max * n), "这些次模拟里，消耗矛盾最多的那一次。" + many],
-      [piece + "最少幸运符", fmt(r.charm.min * n), "这些次模拟里，消耗幸运符最少的那一次。" + many],
-      [piece + "最多幸运符", fmt(r.charm.max * n), "这些次模拟里，消耗幸运符最多的那一次。" + many],
-      [piece + "胚子中位数", (r.embryo.p50 * n).toFixed(1), "一半的模拟用掉的胚子数（含第一件；破坏后换新也算）。置换下来的那件不另计一件。" + many],
-      [piece + "胚子期望", (r.embryo.mean * n).toFixed(2), "平均要用掉几件胚子。破坏越多，这个数越大。" + many],
-      [piece + "尝试中位数", fmt(r.attempt.p50 * n), "一半的模拟里，点「增幅」的次数不超过这个数。" + many],
-      [piece + "破坏中位数", (r.destroy.p50 * n).toFixed(1), "一半的模拟里，胚子被破坏的次数不超过这个数。" + many],
+      [piece + "最少矛盾", fmt(r.crystal.min), "这些次模拟里，消耗矛盾最少的那一次。" + many],
+      [piece + "最多矛盾", fmt(r.crystal.max), "这些次模拟里，消耗矛盾最多的那一次。" + many],
+      [piece + "最少幸运符", fmt(r.charm.min), "这些次模拟里，消耗幸运符最少的那一次。" + many],
+      [piece + "最多幸运符", fmt(r.charm.max), "这些次模拟里，消耗幸运符最多的那一次。" + many],
+      [piece + "胚子中位数", r.embryo.p50.toFixed(1), "一半的模拟用掉的胚子数（含手头那件；破坏后换新也算）。置换下来继续打的不另计一件。" + many],
+      [piece + "胚子期望", r.embryo.mean.toFixed(2), "平均要用掉几件胚子。破坏越多，这个数越大。" + many],
+      [piece + "尝试中位数", fmt(r.attempt.p50), "一半的模拟里，点「增幅」的次数不超过这个数。" + many],
+      [piece + "破坏中位数", r.destroy.p50.toFixed(1), "一半的模拟里，胚子被破坏的次数不超过这个数。" + many],
     ];
     byId("mcOut").innerHTML = rows.map(([k, v, tip]) =>
       `<div class="cell"><span>${k}</span><b class="num">${v}</b><small>${tip}</small></div>`
@@ -1444,38 +1502,40 @@
     renderMarketSummary();
     if (lastMcPaint) {
       paintMcOut();
-      renderMcAdvice(lastMcPaint.start, lastMcPaint.target, lastMcPaint.isWeapon, lastMcPaint.count);
+      renderMcAdvice(lastMcPaint.embryoStart, lastMcPaint.target, lastMcPaint.slots, lastMcPaint.count);
     }
   }
 
-  function renderMcAdvice(start, target, isWeapon, count) {
+  function renderMcAdvice(embryoStart, target, slots, count) {
     const box = byId("mcAdvice");
     const prices = getMarket();
     const advice = E.adviseSet({
-      start,
+      embryoStart,
       target,
-      isWeapon,
-      count,
+      slots,
       crystalTera: prices.crystal,
       charmTera: prices.charm,
     });
     const best = advice.best;
-    const kindName = isWeapon ? "武器" : "非武器";
+    const need = advice.needed || [];
+    const w = need.filter((s) => s.weapon).length;
+    const g = need.length - w;
+    const kindName = (w ? w + " 武器" : "") + (w && g ? "、" : "") + (g ? g + " 非武器" : "部位");
     const gate = best.charmFrom;
     let headline;
     let how;
     if (target <= advice.charmMin) {
       headline = "还在必成附近，幸运符基本用不上。";
-      how = "从 +" + start + " 打到 +" + target + " 不必带符。破坏后从 0 重来也一样。";
+      how = "手头胚子 +" + embryoStart + " 打到 +" + target + " 不必带符。破坏后从 0 重来也一样。";
     } else if (best.kind === "none") {
       headline = "全程不使用幸运符最合适。";
-      how = "从 +" + start + " 打到 +" + target + " 都不用符。破坏后新胚子从 0 重来，也全程不带符。";
+      how = "手头胚子 +" + embryoStart + " 打到 +" + target + " 都不用符。破坏后新胚子从 0 重来，也全程不带符。";
     } else if (advice.mustCharm) {
-      headline = "当前从 +" + start + " 起步必须使用幸运符；破坏后从 0 重来，增幅到 " + gate + " 级后再用符。";
-      how = "手头这件已经到 +" + start + "，一上来就带符。胚子破坏后新胚子从 0 打起，增幅到 +" + gate + " 才开始用幸运符。";
+      headline = "手头胚子已经到 +" + embryoStart + "，一开始就要带符；破坏后从 0 重来，增幅到 " + gate + " 级后再用符。";
+      how = "当前这件一上来就带符。胚子破坏后新胚子从 0 打起，增幅到 +" + gate + " 才开始用幸运符。";
     } else {
       headline = "增幅到 " + gate + " 级后才使用幸运符最合适。";
-      how = "从 +" + start + " 打到 +" + target + "，+" + gate + " 级前不用符。破坏后新胚子从 0 重来，同样是增幅到 +" + gate + " 后再用符。";
+      how = "手头胚子 +" + embryoStart + " 打到 +" + target + "，+" + gate + " 级前不用符。破坏后新胚子从 0 重来，同样是增幅到 +" + gate + " 后再用符。";
     }
 
     const vsAll = advice.allCharm ? savePct(best.tera, advice.allCharm.tera) : null;
@@ -1492,9 +1552,9 @@
     box.innerHTML =
       '<div class="mc-advice-kicker">AI 评测</div>' +
       '<div class="mc-advice-title">' + headline + "</div>" +
-      "<p>按你填的 <b>" + count + " 件" + kindName + "</b>，从 +" + start + " 打到 +" + target +
-      "。" + how +
-      "置换后胚子变回 +" + start + "，下一件从 +" + start + " 接着打。" +
+      "<p>身上 <b>" + count + " 个部位</b>（" + kindName + "）低于 +" + target +
+      "。手头胚子 +" + embryoStart + "。" + how +
+      "置换后胚子变成该部位原来的等级，下一件从那个等级接着打。" +
       "矛盾 <b>" + fmt(prices.crystal) + "</b> 泰拉一个、幸运符 <b>" + fmt(prices.charm) +
       "</b> 泰拉一个折算。合计期望约 <b class=\"num\">" + fmtTera(best.tera) + "</b>" +
       (function () {
@@ -1515,16 +1575,19 @@
       syncMarketInputs();
       renderExchangePreview();
     }
+    if (name === "calc") {
+      renderMcGear();
+    }
     sfx("tab");
   }
 
   function applyConfigUI() {
     const mc = C.monteCarlo;
     const max = D.MAX_LEVEL;
-    const start = byId("mcStart");
-    start.min = 0;
-    start.max = max - 1;
-    start.value = mc.defaultStart;
+    const embryo = byId("mcEmbryo");
+    embryo.min = 0;
+    embryo.max = max;
+    embryo.value = mc.defaultStart || 0;
     const target = byId("mcTarget");
     target.min = 1;
     target.max = max;
@@ -1533,16 +1596,18 @@
     mcf.min = 0;
     mcf.max = max;
     mcf.value = mc.defaultCharmFrom;
-    const cnt = byId("mcCount");
-    cnt.min = 1;
-    cnt.max = mc.maxCount || 12;
-    cnt.value = mc.defaultCount || 1;
+    const fill = byId("mcFillLv");
+    if (fill) {
+      fill.min = 0;
+      fill.max = max;
+    }
     byId("mcRuns").innerHTML = mc.runOptions.map((n) =>
       "<option" + (n === mc.defaultRuns ? " selected" : "") + ">" + n + "</option>"
     ).join("");
     byId("mcPresets").innerHTML = mc.presets.map((p) =>
       '<button type="button" class="btn preset' + (p.gold ? " gold" : "") +
-      '" data-mc="' + p.start + "," + p.target + '">' + p.label + "</button>"
+      '" data-mc="' + (p.embryo != null ? p.embryo : p.start) + "," +
+      (p.gear != null ? p.gear : "") + "," + p.target + '">' + p.label + "</button>"
     ).join("");
     const at = byId("autoTarget");
     at.min = 1;
@@ -1577,9 +1642,9 @@
   function bind() {
     applyConfigUI();
     bindClamp("mcTarget", 1, D.MAX_LEVEL);
-    bindClamp("mcStart", 0, D.MAX_LEVEL - 1);
+    bindClamp("mcEmbryo", 0, D.MAX_LEVEL);
     bindClamp("mcCharmFrom", 0, D.MAX_LEVEL);
-    bindClamp("mcCount", 1, C.monteCarlo.maxCount || 12);
+    bindClamp("mcFillLv", 0, D.MAX_LEVEL);
     bindClamp("autoTarget", 1, D.MAX_LEVEL);
     bindClamp("autoCharmFrom", 0, D.MAX_LEVEL);
     byId("btnHudRail").onclick = toggleHud;
@@ -1714,11 +1779,23 @@
     byId("slotGrid").addEventListener("change", (ev) => {
       const input = ev.target.closest("[data-gear-lv]");
       if (!input) return;
-      const id = input.dataset.gearLv;
-      const lv = clampNum(input.value, 0, D.MAX_LEVEL);
-      state.gear[id] = lv;
-      input.value = lv;
-      save();
+      applyGearLv(input.dataset.gearLv, input.value);
+    });
+    byId("mcGearGrid").addEventListener("change", (ev) => {
+      const input = ev.target.closest("[data-gear-lv]");
+      if (!input) return;
+      applyGearLv(input.dataset.gearLv, input.value);
+    });
+    byId("btnMcFill").onclick = () => {
+      setAllGear(byId("mcFillLv").value);
+      sfx("tab");
+      toast("身上已全部设为 +" + clampNum(byId("mcFillLv").value, 0, D.MAX_LEVEL));
+    };
+    ["mcEmbryo", "mcTarget"].forEach((id) => {
+      const el = byId(id);
+      if (!el) return;
+      el.addEventListener("input", updateMcNeed);
+      el.addEventListener("change", updateMcNeed);
     });
 
     $$("[data-bag-filter]").forEach((btn) => {
@@ -1737,9 +1814,11 @@
     });
     $$("[data-mc]").forEach((btn) => {
       btn.onclick = () => {
-        const [a, b] = btn.dataset.mc.split(",");
-        byId("mcStart").value = clampNum(a, 0, D.MAX_LEVEL - 1);
-        byId("mcTarget").value = clampNum(b, 1, D.MAX_LEVEL);
+        const parts = btn.dataset.mc.split(",");
+        byId("mcEmbryo").value = clampNum(parts[0], 0, D.MAX_LEVEL);
+        if (parts[1] !== "") setAllGear(parts[1]);
+        byId("mcTarget").value = clampNum(parts[2] != null ? parts[2] : parts[1], 1, D.MAX_LEVEL);
+        updateMcNeed();
         sfx("tab");
         runMonteCarlo();
       };
@@ -1769,6 +1848,7 @@
   applyHud();
   syncMarketInputs();
   renderShopCatalog();
+  renderMcGear();
   renderTable();
   render();
   log("先去商城备好矛盾；开符还要幸运符。点背包里的胚子放进增幅机再打。");
