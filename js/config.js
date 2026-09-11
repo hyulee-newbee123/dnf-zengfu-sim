@@ -30,6 +30,7 @@ window.DNFConfig = {
     minLevel: 4,          /* 从此档起才能用 */
     bonus: [              /* 成功率额外 +% ，同样按 from 覆盖 */
       { from: 4, percent: 5 },
+      { from: 11, percent: 3 },   /* 11→12 带符 30+3=33% */
       { from: 12, percent: 2 },
     ],
     cost: [               /* 每档消耗张数，按 from 覆盖 */

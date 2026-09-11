@@ -241,7 +241,7 @@
     }
     function expectRate(from, charm) {
       const base = BASE[from] || 0;
-      const bonus = charm && from >= 4 ? (from >= 12 ? 2 : 5) : 0;
+      const bonus = charm && from >= 4 ? (from >= 12 ? 2 : from >= 11 ? 3 : 5) : 0;
       return Math.min(100, base + bonus);
     }
     function charmSheets(from, charm) {

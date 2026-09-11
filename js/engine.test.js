@@ -23,7 +23,8 @@ function assert(cond, msg) {
 assert(D.BASE_SUCCESS[0] === 100 && D.BASE_SUCCESS[3] === 100, "0-3 is 100%");
 assert(D.BASE_SUCCESS[4] === 80 && D.BASE_SUCCESS[10] === 40, "4 and 10 base rates");
 assert(D.BASE_SUCCESS[12] === 20 && D.BASE_SUCCESS[19] === 20, "12+ is 20%");
-assert(D.charmBonus(3) === 0 && D.charmBonus(4) === 5 && D.charmBonus(11) === 5, "charm +5% before 12");
+assert(D.charmBonus(3) === 0 && D.charmBonus(4) === 5 && D.charmBonus(10) === 5, "charm +5% through 10");
+assert(D.charmBonus(11) === 3, "charm +3% at 11");
 assert(D.charmBonus(12) === 2, "charm +2% from 12");
 assert(D.charmCost(3) === 0 && D.charmCost(4) === 1 && D.charmCost(9) === 1, "charm 1 before 10");
 assert(D.charmCost(10) === 2 && D.charmCost(11) === 2, "charm 2 at 10-11");
@@ -33,6 +34,7 @@ assert(E.attemptCost(10, true, true).charm === 2, "10→11 costs 2 charms");
 assert(E.attemptCost(16, false, true).charm === 8, "16→17 costs 8 charms");
 assert(E.attemptCost(9, true, false).charm === 0, "no charm when off");
 assert(E.successRate(4, true) === 85, "4→5 with charm 85%");
+assert(E.successRate(11, true) === 33, "11→12 with charm 33%");
 assert(E.successRate(12, true) === 22, "12→13 with charm 22%");
 assert(E.successRate(10, false) === 40, "10→11 no charm 40%");
 assert(D.failRule(6).type === "downgrade" && D.failRule(6).drop === 1, "6 fail -1");
