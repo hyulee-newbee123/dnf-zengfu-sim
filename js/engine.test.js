@@ -42,6 +42,7 @@ assert(D.failRule(7).drop === 3 && D.failRule(9).drop === 3, "7-9 fail -3");
 assert(D.failRule(10).type === "destroy", "10+ destroy");
 assert(D.CRYSTAL_WEAPON[0] === 35 && D.CRYSTAL_WEAPON[3] === 97, "weapon 1-4 crystals");
 assert(D.CRYSTAL_GEAR[0] === 26 && D.CRYSTAL_GEAR[3] === 72, "gear 1-4 crystals");
+assert(D.CRYSTAL_GEAR[11] === 484, "11→12 gear crystal 484");
 assert(D.weaponDualAtk(4) === 109 && D.weaponDualAtk(12) === 641 && D.weaponDualAtk(20) === 817, "weapon dual atk table");
 assert(D.gearStrInt(4) === 48 && D.gearStrInt(12) === 245 && D.gearStrInt(20) === 325, "gear str/int table");
 assert(D.gearMagicResist(1) === 10 && D.gearMagicResist(4) === 44, "magic resist anchors");
