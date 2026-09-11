@@ -467,8 +467,12 @@
       const lucky = hot.filter((x) => x.delta >= 5).sort((a, b) => b.delta - a.delta);
       const dark = hot.filter((x) => x.delta <= -3).sort((a, b) => a.delta - b.delta);
       let body = "期望成功约 " + s.expOk.toFixed(1) + " 次，实际 " + s.ok + " 次。";
-      if (lucky.length) body += " 欧在 " + lucky.map((x) => "+" + x.from).join(" / ") + "，尤其 +" + lucky[0].from + "。";
-      if (dark.length) body += " 黑在 " + dark.map((x) => "+" + x.from).join(" / ") + "。";
+      if (lucky.length) {
+        body += " 欧在 " + lucky.map((x) => x.from + "-" + (x.from + 1)).join(" / ");
+        if (lucky.length > 1) body += "，尤其 " + lucky[0].from + "-" + (lucky[0].from + 1);
+        body += "。";
+      }
+      if (dark.length) body += " 黑在 " + dark.map((x) => x.from + "-" + (x.from + 1)).join(" / ") + "。";
       if (!lucky.length && !dark.length) body += " 各档都贴着期望走。";
       body += " 打出 " + s.to11 + " 件 +11，+10 碎了 " + s.dest10 + " 次。";
       return { title: "总体：" + tone + "。", body };
